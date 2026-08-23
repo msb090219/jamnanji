@@ -1,0 +1,5 @@
+# Jamnanji — static site, no build step.
+# Local dev: node server.js (serves ./site at http://127.0.0.1:4173)
+
+[build]
+  publish = "site"
