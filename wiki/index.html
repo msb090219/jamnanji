@@ -1,0 +1,1271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jamnanji Wiki | Fandom</title>
+<link rel="preload" href="assets/jamnanji-map-illustrated.webp" as="image" type="image/webp" fetchpriority="high">
+<style>
+  /* ============================================================
+     JAMNANJI WIKI — dark jungle theme
+     Palette:
+       ink      #060a09   page void
+       panel    #141a17   surfaces
+       panel-2  #1b2320   raised surfaces
+       inset    #0e1311   wells, table bodies
+       line     #26312b   borders
+       line-hi  #3a473f   borders hover
+       text     #d8ded9   body copy
+       dim      #93a09a   secondary copy
+       gold     #d4af37   brand accent
+       emerald  #37a077   positive accent
+       link     #6cc4ea
+       danger   #e0655c
+  ============================================================ */
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --ink:#070c0a; --panel:#141a17; --panel2:#1b2320; --inset:#0e1311;
+    --line:#26312b; --linehi:#3a473f;
+    --text:#d8ded9; --dim:#93a09a;
+    --gold:#d4af37; --golddim:#8a7326; --emerald:#37a077;
+    --link:#6cc4ea; --danger:#e0655c;
+    --radius:6px;
+  }
+  html{scroll-behavior:smooth}
+  body{
+    font-family:Rubik,"Segoe UI",Helvetica,Arial,sans-serif;
+    color:var(--text); font-size:14px;
+    background-color:var(--ink);
+    background-image:
+      radial-gradient(1200px 500px at 50% -100px, rgba(212,175,55,.05), transparent),
+      linear-gradient(180deg,rgba(4,8,7,.78) 0%,rgba(5,10,8,.88) 45%,rgba(3,7,6,.96) 100%),
+      url('assets/jamnanji-map-illustrated.webp');
+    background-size:auto,auto,cover;
+    background-position:center,top center,center top;
+    background-repeat:no-repeat,no-repeat,no-repeat;
+    background-attachment:fixed,fixed,fixed;
+  }
+  a{color:var(--link);text-decoration:none;transition:color .15s}
+  a:hover{color:#a3ddf5;text-decoration:underline}
+  a.redlink{color:var(--danger)}
+  a.redlink:visited{color:var(--danger)}
+  button{font-family:inherit;cursor:pointer}
+  img{max-width:100%}
+  ::selection{background:rgba(212,175,55,.35)}
+
+  /* ================= GLOBAL NAV ================= */
+  .global-nav{
+    background:rgba(8,11,10,.97);height:48px;display:flex;align-items:center;
+    padding:0 20px;gap:20px;position:sticky;top:0;z-index:100;border-bottom:1px solid #000;
+    backdrop-filter:blur(8px);
+  }
+  .fandom-logo{color:#fff;font-weight:800;font-size:18px;letter-spacing:.5px;text-shadow:0 0 14px rgba(250,0,90,.35)}
+  .fandom-logo b{color:#fa005a}
+  .global-nav-links{display:flex;gap:4px;font-size:12px;font-weight:600;color:#aab3ae}
+  .global-nav-links span{padding:6px 10px;border-radius:4px}
+  .global-nav-links span:hover{color:#fff;background:rgba(255,255,255,.08);cursor:pointer}
+  .global-search{margin-left:auto;display:flex;align-items:center;gap:8px;background:#1d2320;border:1px solid var(--line);border-radius:20px;padding:7px 14px;width:280px;transition:border-color .15s}
+  .global-search:focus-within{border-color:var(--gold)}
+  .global-search svg{width:13px;height:13px;stroke:var(--dim)}
+  .global-search input{background:none;border:none;outline:none;color:#eee;font-size:12.5px;width:100%}
+  .global-search input::placeholder{color:#666}
+  .nav-user{display:flex;align-items:center;gap:10px}
+  .nav-login{font-size:12px;font-weight:700;color:#fff;background:#396a94;border-radius:16px;padding:7px 16px}
+  .nav-login:hover{background:#4680b3}
+
+  /* ================= COMMUNITY HEADER ================= */
+  .community-header{
+    position:relative;color:#fff;
+    background:url('assets/cutscene-temple-doors.webp') center 30%/cover no-repeat,var(--ink);
+    box-shadow:inset 0 -80px 90px rgba(4,8,7,.92), inset 0 70px 90px rgba(4,8,7,.65);
+    border-bottom:3px solid var(--gold);
+  }
+  .community-header::before{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(5,11,9,.45),rgba(6,14,10,.68));pointer-events:none}
+  .community-header-inner{position:relative;max-width:1360px;margin:0 auto;padding:34px 24px 0}
+  .header-right{float:right;display:flex;align-items:center;gap:10px;padding-top:8px}
+  .discuss-btn,.explore-btn,.play-btn{font-size:12px;font-weight:700;border-radius:4px;padding:9px 18px;border:none;transition:transform .12s, filter .15s}
+  .explore-btn{background:#f2efe6;color:#15100a}
+  .discuss-btn{background:#396a94;color:#fff}
+  .play-btn{background:var(--gold);color:#15100a;text-decoration:none}
+  .explore-btn:hover,.discuss-btn:hover,.play-btn:hover{filter:brightness(1.12);transform:translateY(-1px);text-decoration:none}
+  .wiki-wordmark{font-size:38px;font-weight:800;letter-spacing:.02em;color:#fff;text-shadow:0 2px 14px rgba(0,0,0,.85), 0 0 40px rgba(212,175,55,.15)}
+  .wiki-wordmark small{display:block;font-size:12.5px;font-weight:600;color:#e6dcae;margin-top:4px;letter-spacing:.16em;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,.85)}
+  .header-tabs{display:flex;gap:2px;margin-top:20px}
+  .header-tabs a{color:#d3e2d8;font-size:13px;font-weight:700;padding:10px 20px;border-radius:6px 6px 0 0;text-shadow:0 1px 3px rgba(0,0,0,.75)}
+  .header-tabs a.active{background:var(--panel);color:var(--gold);box-shadow:0 -3px 0 var(--gold) inset}
+  .header-tabs a:not(.active):hover{background:rgba(255,255,255,.1);text-decoration:none;color:#fff}
+
+  /* ================= PAGE SHELL ================= */
+  .page-shell{max-width:1360px;margin:0 auto;display:flex;gap:20px;padding:22px 16px 70px;align-items:flex-start}
+  .left-rail{width:200px;flex-shrink:0;position:sticky;top:64px}
+  .right-rail{width:300px;flex-shrink:0;display:flex;flex-direction:column;gap:16px}
+  .content-area{flex:1;min-width:0;background:linear-gradient(180deg,#171e1a 0%,var(--panel) 220px);border:1px solid var(--line);border-radius:var(--radius);padding:30px 38px 38px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+  @media(max-width:1150px){.right-rail{display:none}}
+  @media(max-width:900px){.left-rail{display:none}.page-shell{padding:12px}}
+
+  .rail-box{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-bottom:16px}
+  .rail-box h3{background:linear-gradient(90deg,#20291f,#181f1c);border-bottom:1px solid var(--line);font-size:11px;text-transform:uppercase;letter-spacing:.1em;padding:9px 14px;color:var(--gold)}
+  .rail-box ul{list-style:none;padding:7px 0}
+  .rail-box li a{display:block;padding:6px 14px;font-size:12.5px;color:#c4cac6;border-left:2px solid transparent}
+  .rail-box li a:hover{background:rgba(255,255,255,.04);text-decoration:none;color:#fff;border-left-color:var(--gold)}
+
+  /* poll */
+  .poll-opt{display:block;width:100%;text-align:left;background:var(--inset);border:1px solid var(--line);color:var(--text);border-radius:4px;padding:8px 10px;margin:6px 10px;width:calc(100% - 20px);font-size:12px;position:relative;overflow:hidden;transition:border-color .15s}
+  .poll-opt:hover{border-color:var(--linehi)}
+  .poll-fill{position:absolute;inset:0;background:linear-gradient(90deg,rgba(212,175,55,.22),rgba(212,175,55,.08));z-index:0}
+  .poll-opt span{position:relative;z-index:1;display:flex;justify-content:space-between}
+  .poll-opt b{color:var(--gold)}
+
+  /* recent activity */
+  .ra-item{padding:8px 14px;border-bottom:1px solid #1c2420;font-size:12px;line-height:1.45}
+  .ra-item:last-child{border-bottom:none}
+  .ra-item a{font-weight:600}
+  .ra-time{color:var(--dim);font-size:11px;display:block}
+
+  /* ================= ADVERTISEMENTS ================= */
+  .ad-unit{text-align:center}
+  .ad-frame{
+    position:relative;background:linear-gradient(160deg,#101512,#1a201c 60%,#12181a);
+    border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;color:#e8e4d4;
+  }
+  .ad-frame::after{content:'Ad';position:absolute;top:4px;right:6px;font-size:8.5px;letter-spacing:.1em;color:#6a736d;border:1px solid var(--line);border-radius:2px;padding:0 4px;text-transform:uppercase}
+  .ad-leaderboard{width:min(100%,970px);margin:0 auto 24px;padding:34px 20px}
+  .ad-box{padding:44px 18px}
+  .ad-video{aspect-ratio:16/9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:18px}
+  .ad-sponsor{font-size:9.5px;color:var(--dim);letter-spacing:.22em;text-transform:uppercase;margin-bottom:8px}
+  .ad-headline{font-weight:800;font-size:19px;line-height:1.25;margin-bottom:6px}
+  .ad-leaderboard .ad-headline{font-size:23px}
+  .ad-sub{font-size:11.5px;color:#b9c0ba;margin-bottom:12px}
+  .ad-cta{display:inline-block;font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:linear-gradient(135deg,var(--gold),#b8912a);color:#171207;padding:8px 22px;border-radius:20px}
+  .ad-frame:hover .ad-cta{filter:brightness(1.1)}
+  .ad-note{font-size:9.5px;color:#585f59;margin-top:10px}
+  .ad-choice{position:absolute;bottom:4px;right:6px;font-size:8.5px;color:#6a736d}
+  .ad-glow{position:absolute;width:220px;height:220px;border-radius:50%;filter:blur(70px);opacity:.25;pointer-events:none}
+
+  /* ================= ARTICLE TYPOGRAPHY ================= */
+  .breadcrumb{font-size:11.5px;color:var(--dim);margin-bottom:14px}
+  .breadcrumb a{color:var(--dim)}
+  .breadcrumb a:hover{color:var(--link)}
+  .article-title{font-family:Rubik,sans-serif;font-size:33px;font-weight:800;line-height:1.12;color:#fff;padding-bottom:10px;margin-bottom:4px;position:relative}
+  .article-title::after{content:'';position:absolute;left:0;bottom:0;width:64px;height:3px;background:linear-gradient(90deg,var(--gold),transparent);border-radius:2px}
+  .title-under{font-size:12.5px;color:var(--dim);margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  h2{font-size:22px;font-weight:800;color:#fff;border-bottom:1px solid var(--line);padding-bottom:6px;margin:32px 0 14px;clear:both;position:relative}
+  h2::before{content:'';position:absolute;left:-14px;top:4px;bottom:8px;width:3px;background:var(--gold);border-radius:2px}
+  h3{font-size:16.5px;font-weight:700;color:#ecf0ed;margin:22px 0 8px}
+  p{margin:0 0 12px;line-height:1.7}
+  ul.wiki-list,ol.wiki-list{margin:0 0 14px 22px;line-height:1.7}
+  ul.wiki-list li::marker{color:var(--gold)}
+  ol.wiki-list li::marker{color:var(--gold);font-weight:700}
+  .mw-editsection{float:right;font-size:11px;font-weight:normal}
+  sup.cn{font-style:italic;color:#777;font-size:10px}
+  blockquote.quote{border-left:4px solid var(--gold);background:linear-gradient(90deg,rgba(212,175,55,.1),rgba(212,175,55,.02));padding:12px 18px;margin:0 0 16px;font-style:italic;color:#e3e7de;border-radius:0 var(--radius) var(--radius) 0}
+  blockquote.quote cite{display:block;font-size:12px;font-style:normal;color:var(--dim);margin-top:8px}
+  .hatnote{font-size:12.5px;font-style:italic;color:var(--dim);margin-bottom:14px;padding-left:12px;border-left:2px solid var(--linehi)}
+  .stub{border:1px solid rgba(212,175,55,.4);background:rgba(212,175,55,.07);font-size:12.5px;padding:10px 16px;border-radius:var(--radius);margin-bottom:18px;color:#ddd0a0}
+  code{background:var(--inset);border:1px solid var(--line);border-radius:3px;padding:1px 6px;font-size:12.5px;color:#a8d8b0}
+
+  /* toc */
+  .toc{display:inline-block;border:1px solid var(--line);background:var(--inset);padding:14px 22px 14px 16px;font-size:12.5px;margin-bottom:20px;border-radius:var(--radius)}
+  .toc b{display:block;margin-bottom:8px;color:var(--gold);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+  .toc ol{margin-left:20px}
+  .toc li{margin:4px 0}
+
+  /* tables */
+  table.wikitable{border-collapse:separate;border-spacing:0;background:var(--inset);margin:0 0 18px;font-size:13px;max-width:100%;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .wikitable th,.wikitable td{border-bottom:1px solid #1d2622;border-right:1px solid #1d2622;padding:8px 11px;vertical-align:top}
+  .wikitable th:last-child,.wikitable td:last-child{border-right:none}
+  .wikitable tr:last-child td{border-bottom:none}
+  .wikitable th{background:linear-gradient(180deg,#222b25,#1a211d);text-align:left;color:var(--gold);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+  .wikitable tbody tr{transition:background .12s}
+  .wikitable tbody tr:hover{background:rgba(108,196,234,.045)}
+  .wikitable caption{font-weight:700;padding:8px;background:linear-gradient(180deg,#222b25,#1a211d);border-bottom:1px solid var(--line);color:#dfe6df;text-align:left}
+  .mob-thumb{width:46px;height:46px;object-fit:contain;background:radial-gradient(circle,#232a26,#0f1412);border:1px solid var(--line);border-radius:6px;vertical-align:middle;padding:3px;transition:transform .15s,border-color .15s}
+  .mob-thumb:hover{transform:scale(1.12);border-color:var(--gold)}
+
+  /* infobox */
+  .infobox{float:right;width:305px;border:1px solid var(--line);background:var(--inset);font-size:12.5px;margin:0 0 18px 24px;border-radius:var(--radius);overflow:hidden;box-shadow:0 6px 22px rgba(0,0,0,.45)}
+  .infobox .ib-title{background:linear-gradient(135deg,#12382a,#0c241a);color:#fff;text-align:center;font-size:15.5px;font-weight:800;padding:11px;border-bottom:2px solid var(--gold)}
+  .infobox .ib-image{background:#0b0f0d;text-align:center}
+  .infobox .ib-image img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover}
+  .infobox .ib-art{width:112px;height:112px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffd76a,#b8860b);display:flex;align-items:center;justify-content:center;font-size:52px;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,.4);margin:16px auto;border:3px solid var(--gold);box-shadow:0 0 26px rgba(212,175,55,.35)}
+  .infobox table{width:100%;border-collapse:collapse}
+  .infobox th{width:38%;vertical-align:top;padding:7px 9px;text-align:left;background:#151b18;font-weight:600;border-top:1px solid #202823;color:#cfd4cf}
+  .infobox td{padding:7px 9px;border-top:1px solid #202823}
+  .infobox .ib-caption{font-size:11px;color:var(--dim);text-align:center;padding:9px 12px;background:#111613;font-style:italic;border-top:1px solid #202823}
+
+  /* article images */
+  figure.thumb{border:1px solid var(--line);background:var(--inset);padding:7px;border-radius:var(--radius);margin:4px 0 18px 24px;width:330px;float:right;clear:right;transition:border-color .2s}
+  figure.thumb:hover{border-color:var(--linehi)}
+  figure.thumb.left{float:left;clear:left;margin:4px 24px 18px 0}
+  figure.thumb img{display:block;width:100%;border-radius:4px}
+  figure.thumb figcaption{font-size:11.5px;color:var(--dim);padding:8px 5px 3px;line-height:1.5}
+  .img-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(172px,1fr));gap:13px;margin:0 0 18px}
+  .img-gallery figure{border:1px solid var(--line);background:var(--inset);border-radius:var(--radius);overflow:hidden;margin:0;transition:transform .18s, border-color .18s, box-shadow .18s}
+  .img-gallery figure:hover{transform:translateY(-3px);border-color:var(--golddim);box-shadow:0 8px 22px rgba(0,0,0,.45)}
+  .img-gallery img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:#0b0f0d}
+  .img-gallery.full-art figure:hover img{transform:none}
+  .img-gallery.full-art img{aspect-ratio:1/1;object-fit:contain;padding:12px;background:radial-gradient(circle at 50% 42%,#202a24,#0b0f0d)}
+  .img-gallery figcaption{font-size:11.5px;color:var(--dim);padding:7px 9px;text-align:center}
+  .pose-row img{object-fit:contain;object-position:top center;background:radial-gradient(circle at 50% 30%,#18211d,#0b0f0d)}
+
+  /* footer of article */
+  .cat-links{border:1px solid var(--line);background:var(--inset);padding:11px 16px;font-size:12.5px;margin-top:36px;border-radius:var(--radius);color:var(--dim)}
+  .cat-pill{display:inline-block;background:#1a211d;border:1px solid var(--line);border-radius:20px;padding:2px 11px;margin:2px 4px 2px 0;font-size:11.5px;color:#b9c2bb;transition:border-color .15s,color .15s}
+  .cat-pill:hover{text-decoration:none;border-color:var(--gold);color:var(--gold)}
+  .navbox{border:1px solid var(--line);background:var(--inset);font-size:12px;margin-top:18px;border-radius:var(--radius);overflow:hidden}
+  .navbox-title{background:linear-gradient(135deg,#12382a,#0c241a);color:#fff;font-weight:700;text-align:center;padding:8px}
+  .navbox-group{width:130px;background:#151b18;font-weight:600;padding:7px 11px;vertical-align:top;color:var(--gold);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+  .navbox table{border-collapse:collapse;width:100%}
+  .navbox td{padding:7px 11px;border-top:1px solid #1d2622}
+  .navbox tr:first-child td{border-top:none}
+
+  .rarity-c{color:#7fa4ec;font-weight:700}.rarity-r{color:#e0b73f;font-weight:700}.rarity-s{color:#999;font-weight:700}
+
+  /* related articles */
+  .related{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin:10px 0 6px}
+  .related a{display:block;background:var(--inset);border:1px solid var(--line);border-radius:var(--radius);padding:13px 14px;color:var(--text);transition:border-color .15s, transform .15s}
+  .related a:hover{text-decoration:none;border-color:var(--gold);transform:translateY(-2px)}
+  .related small{display:block;color:var(--dim);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
+  .related b{color:#fff;font-size:13.5px}
+
+  /* ================= COMMENTS ================= */
+  .comments-section{margin-top:44px;border-top:2px solid var(--line);padding-top:22px}
+  .cs-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+  .cs-head h2{border:none;margin:0;padding:0;font-size:19px}
+  .cs-head h2::before{display:none}
+  .cs-sort{margin-left:auto;font-size:12px;color:var(--dim)}
+  .cs-sort b{color:var(--text)}
+  .comment{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid #1b231f}
+  .comment.reply{margin-left:52px;border-left:2px solid #222b26;padding-left:16px}
+  .avatar{width:40px;height:40px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.18)}
+  .av-a{background:linear-gradient(135deg,#c0392b,#7b241c)}.av-b{background:linear-gradient(135deg,#27ae60,#145a32)}.av-c{background:linear-gradient(135deg,#2980b9,#1a5276)}.av-d{background:linear-gradient(135deg,#8e44ad,#4a235a)}.av-e{background:linear-gradient(135deg,#d4af37,#8a6914)}.av-f{background:linear-gradient(135deg,#16a085,#0e6655)}.av-g{background:linear-gradient(135deg,#e67e22,#9c5708)}
+  .c-body{flex:1;min-width:0}
+  .c-meta{font-size:12.5px;margin-bottom:4px}
+  .c-user{font-weight:700;color:#fff}
+  .badge{display:inline-block;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;border-radius:3px;padding:1px 6px;margin-left:6px;vertical-align:1px}
+  .badge.admin{background:rgba(212,175,55,.16);color:var(--gold);border:1px solid rgba(212,175,55,.4)}
+  .badge.mod{background:rgba(55,160,119,.16);color:#5fc79c;border:1px solid rgba(55,160,119,.4)}
+  .badge.bot{background:rgba(108,196,234,.14);color:#8fd2ef;border:1px solid rgba(108,196,234,.35)}
+  .c-time{color:var(--dim);font-weight:400;margin-left:8px}
+  .c-text{font-size:13.5px;line-height:1.6;color:#ccd3cd}
+  .c-actions{margin-top:7px;display:flex;gap:16px;font-size:11.5px;color:var(--dim)}
+  .c-actions a{color:var(--dim)}
+  .c-actions a:hover{color:var(--link)}
+  .c-score b{color:var(--emerald)}
+  .reply-box{display:flex;gap:12px;margin-top:18px}
+  .reply-input{flex:1;background:var(--inset);border:1px solid var(--line);border-radius:var(--radius);color:var(--text);padding:11px 14px;font-size:13px;font-family:inherit}
+  .reply-input:focus{outline:none;border-color:var(--gold)}
+  .btn-post{background:linear-gradient(135deg,var(--emerald),#23795a);color:#fff;font-weight:700;font-size:12.5px;border:none;border-radius:var(--radius);padding:0 22px}
+
+  /* ================= COMMUNITY PAGE ================= */
+  .comm-tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+  .comm-tab{background:var(--inset);border:1px solid var(--line);color:var(--text);font-size:12px;font-weight:600;border-radius:20px;padding:7px 16px;transition:all .15s}
+  .comm-tab:hover{border-color:var(--linehi);color:#fff;text-decoration:none}
+  .comm-tab.active{background:linear-gradient(135deg,rgba(212,175,55,.2),rgba(212,175,55,.08));border-color:var(--gold);color:var(--gold)}
+  .thread{display:flex;gap:14px;align-items:flex-start;padding:16px 6px;border-bottom:1px solid #1b231f;transition:background .12s}
+  .thread:hover{background:rgba(255,255,255,.02)}
+  .t-icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;background:var(--inset);border:1px solid var(--line)}
+  .t-main{flex:1;min-width:0}
+  .t-title{font-size:15px;font-weight:700;color:#fff}
+  .t-title:hover{color:var(--link)}
+  .t-pin{font-size:10px;font-weight:800;color:var(--gold);border:1px solid rgba(212,175,55,.4);background:rgba(212,175,55,.08);border-radius:3px;padding:1px 6px;margin-right:8px;text-transform:uppercase;letter-spacing:.06em}
+  .t-meta{font-size:12px;color:var(--dim);margin-top:4px}
+  .t-stats{text-align:right;flex-shrink:0;font-size:12px;color:var(--dim)}
+  .t-stats b{display:block;color:#fff;font-size:15px}
+  .new-post-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--emerald);margin-left:6px;box-shadow:0 0 8px rgba(55,160,119,.8)}
+
+  /* ================= FOOTER ================= */
+  .site-footer{border-top:1px solid var(--line);background:rgba(8,12,10,.92);margin-top:20px}
+  .footer-inner{max-width:1360px;margin:0 auto;padding:38px 24px 30px;display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:34px}
+  @media(max-width:800px){.footer-inner{grid-template-columns:1fr 1fr}}
+  .footer-brand p{font-size:12px;color:var(--dim);line-height:1.6;margin-top:10px;max-width:340px}
+  .footer-col h4{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--gold);margin-bottom:12px}
+  .footer-col a{display:block;font-size:12.5px;color:#aeb6b0;padding:4px 0}
+  .footer-col a:hover{color:#fff;text-decoration:none}
+  .footer-legal{border-top:1px solid #1a211d;padding:18px 24px;text-align:center;font-size:11px;color:#5d665f;max-width:1360px;margin:0 auto}
+
+  @media print{ body{background:#fff;color:#000} }
+</style>
+</head>
+<body>
+
+<nav class="global-nav">
+  <span class="fandom-logo">fan<b>dom</b></span>
+  <div class="global-nav-links"><span>Games</span><span>Anime</span><span>Movies</span><span>TV</span><span>Video</span></div>
+  <div class="global-search">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg>
+    <input type="text" placeholder="Search Jamnanji Wiki…">
+  </div>
+  <div class="nav-user"><button class="nav-login">Log in</button></div>
+</nav>
+
+<header class="community-header">
+  <div class="community-header-inner">
+    <div class="header-right">
+      <a class="play-btn" href="https://jamnanji.netlify.app" target="_blank" rel="noopener">Play Jamnanji ↗</a>
+      <button class="explore-btn">Explore</button>
+      <button class="discuss-btn">Discuss</button>
+    </div>
+    <div class="wiki-wordmark">JAMNANJI WIKI<small>The Hidden Joule · 412 articles · 8,903 edits</small></div>
+    <nav class="header-tabs">
+      <a href="#/main" class="active">Articles</a>
+      <a href="#/community">Community</a>
+    </nav>
+  </div>
+</header>
+
+<div class="page-shell">
+
+  <aside class="left-rail">
+    <div class="rail-box"><h3>Wiki Tools</h3><ul>
+      <li><a href="#/main">Main page</a></li>
+      <li><a href="#/bestiary">Bestiary</a></li>
+      <li><a href="#/cards">Cards</a></li>
+      <li><a href="#/mechanics">Game mechanics</a></li>
+      <li><a href="#/locations">Locations</a></li>
+      <li><a href="#/jamnani">Mr Jamnani</a></li>
+      <li><a href="#/strategy">Strategy guide</a></li>
+      <li><a href="#" class="redlink">Hidden Joules (lore)</a></li>
+      <li><a href="#" class="redlink">Speedrunning</a></li>
+    </ul></div>
+    <div class="rail-box"><h3>Community</h3><ul>
+      <li><a href="#/community">Discussion feed</a></li>
+      <li><a href="#">Recent changes</a></li>
+      <li><a href="#">Random page</a></li>
+      <li><a href="#">Admin noticeboard</a></li>
+    </ul></div>
+    <div class="rail-box"><h3>Weekly Poll</h3>
+      <div style="padding:12px 14px 14px;font-size:12.5px;color:var(--dim)">Which enemy ruins your runs most?</div>
+      <button class="poll-opt"><span style="position:relative;z-index:1"><i class="poll-fill" style="width:41%"></i>Damping Mosquito Swarm<b>41%</b></span></button>
+      <button class="poll-opt"><span style="position:relative;z-index:1"><i class="poll-fill" style="width:27%"></i>Inertia Sloth<b>27%</b></span></button>
+      <button class="poll-opt"><span style="position:relative;z-index:1"><i class="poll-fill" style="width:18%"></i>Pulley Spider<b>18%</b></span></button>
+      <button class="poll-opt"><span style="position:relative;z-index:1"><i class="poll-fill" style="width:14%"></i>Hornets (hazard)<b>14%</b></span></button>
+      <div style="font-size:10.5px;color:var(--dim);padding:8px 14px 12px">3,412 votes · ends Sunday</div>
+    </div>
+    <div class="rail-box"><h3>Recent Activity</h3>
+      <div class="ra-item"><a href="#/bestiary">Bestiary</a> — added Comet Newt trivia <span class="ra-time">2h ago · FrictionBoarFan</span></div>
+      <div class="ra-item"><a href="#/cards">Cards</a> — updated Inertia+ costs <span class="ra-time">6h ago · InertiaSlothEnjoyer</span></div>
+      <div class="ra-item"><a href="#/jamnani">Mr Jamnani</a> — new quote sourced <span class="ra-time">yesterday · JamnaniQuoteBot</span></div>
+      <div class="ra-item"><a href="#/locations">Locations</a> — shrine odds table <span class="ra-time">last week · QuicksandSurvivor</span></div>
+    </div>
+  </aside>
+
+  <main class="content-area" id="article-root"></main>
+
+  <aside class="right-rail">
+    <div class="ad-unit">
+      <div class="ad-sponsor">Sponsored</div>
+      <div class="ad-frame ad-box">
+        <i class="ad-glow" style="background:#d4af37;top:-40px;left:-30px"></i>
+        <div class="ad-headline">THE STORM CIRCUIT</div>
+        <div class="ad-sub">Electricity journey. Coming soon*.<br>*Timeline subject to curriculum review.</div>
+        <span class="ad-cta">Join Waitlist</span>
+        <div class="ad-note">waitlist is a notebook page that says "maybe"</div>
+      </div>
+    </div>
+    <div class="rail-box"><h3>Jamnanji Community</h3>
+      <div style="padding:12px 14px;font-size:12.5px;line-height:2">
+        <div style="display:flex;justify-content:space-between"><span>Explorers</span><b style="color:#fff">12,847</b></div>
+        <div style="display:flex;justify-content:space-between"><span>Online now</span><b style="color:var(--emerald)">214</b></div>
+        <div style="display:flex;justify-content:space-between"><span>Posts today</span><b style="color:#fff">96</b></div>
+      </div>
+      <div style="padding:0 14px 14px"><a class="cat-pill" href="#/community">Open the feed →</a></div>
+    </div>
+    <div class="ad-unit">
+      <div class="ad-frame ad-video">
+        <i class="ad-glow" style="background:#37a077;bottom:-60px;right:-40px"></i>
+        <div style="width:54px;height:54px;border-radius:50%;background:rgba(212,175,55,.15);border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--gold)">▶</div>
+        <div class="ad-headline" style="font-size:15px">Field Tonic™</div>
+        <div class="ad-sub">The label just says “trust me”.<br>The physics checks out.</div>
+        <span class="ad-cta">Buy 2 Get 1 Stability</span>
+        <div class="ad-note">Your video will resume after this message.</div>
+      </div>
+    </div>
+    <div class="rail-box"><h3>Explore the Fandom Network</h3><ul>
+      <li><a href="#">Slay the Spire Wiki</a></li>
+      <li><a href="#">Roguelike Deckbuilders Wiki</a></li>
+      <li><a href="#">Physics Classroom Wiki</a></li>
+      <li><a href="#">NCEA Study Hub</a></li>
+      <li><a href="#">Unstoppable Objects Wiki</a></li>
+    </ul></div>
+  </aside>
+</div>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <span class="fandom-logo">fan<b>dom</b></span>
+      <p>Fandom is a wiki hosting service. This particular wiki is devoted to a jungle where physics is enforced by wildlife, and to the teacher who watches us fail there. Content is available under CC-BY-SA unless the jungle objects.</p>
+    </div>
+    <div class="footer-col"><h4>Jamnanji Wiki</h4>
+      <a href="#/main">Main page</a><a href="#/bestiary">Bestiary</a><a href="#/cards">Cards</a>
+      <a href="#/strategy">Strategy guide</a><a href="#/community">Community</a>
+    </div>
+    <div class="footer-col"><h4>Contribute</h4>
+      <a href="#">Create account</a><a href="#">Recent changes</a><a href="#">Wanted pages</a>
+      <a href="#">Style guide</a><a href="#">Admin noticeboard</a>
+    </div>
+    <div class="footer-col"><h4>Fandom</h4>
+      <a href="#">About</a><a href="#">Careers</a><a href="#">Press</a>
+      <a href="#">Advertise</a><a href="#">Media Kit</a><a href="#">Contact</a>
+    </div>
+  </div>
+  <div class="footer-legal">© 2026 Fandom, Inc. · Terms of Use · Privacy Policy · Global Sitemap · Local Sitemap · AdChoices · This is a parody fan page for a fictional release. The joules are real; everything else is negotiable.</div>
+</footer>
+
+<script>
+const A = 'assets/';
+const EDIT = '<span class="mw-editsection">[<a href="#">view</a> · <a href="#">edit</a> · <a href="#">history</a>]</span>';
+const mobImg = id => `<img class="mob-thumb" src="${A}enemy-${id}.webp" alt="" loading="lazy" decoding="async">`;
+
+/* ---------- reusable blocks ---------- */
+/* ---- Random programmatic ad engine ----
+   Picks a random non-wiki ad with random colours and a live stock photo,
+   re-rolled on every page navigation — just like a real ad network. */
+const AD_POOL = [
+  { brand:'MERGE REALMS™', head:'This Puzzle Is IMPOSSIBLE!', sub:'92% of players quit at level 7. Can you beat it?', cta:'PLAY FREE NOW', seed:'mergegame', note:'In-app purchases available' },
+  { brand:'SafeDrive Insurance', head:'Drivers Overpay $412/yr on Average', sub:'See your personalized rate in 90 seconds. No obligation.', cta:'CHECK MY RATE', seed:'roadtrip', note:'Not available in all states' },
+  { brand:'ShadowNet VPN', head:'Your ISP Is Selling Your Data', sub:'Military-grade encryption. 73% off — today only.', cta:'CLAIM 73% OFF', seed:'serverroom', note:'No logs. Probably.' },
+  { brand:'LingoLeap', head:'Speak Spanish Before Dinner', sub:'Bite-sized lessons. The free forever plan. Owls involved.', cta:'START FREE', seed:'spanishclass', note:'' },
+  { brand:'CoinVortex Exchange', head:'The Energy Coin Is Coming', sub:'Smart investors are already positioning. Are you?', cta:'TRADE NOW', seed:'goldcoins', note:'Not financial advice. Definitely not.' },
+  { brand:'DreamCrate', head:'We Put A Mattress In A Box', sub:'Delivered to your door. 100-night trial. Free returns.', cta:'SHOP NOW', seed:'bedroom', note:'' },
+  { brand:'FreshFork Meals', head:'$90 OFF Your First Box', sub:'Chef-designed dinners ready in 15 minutes. Skip anytime.', cta:'CLAIM OFFER', seed:'dinnerplate', note:'' },
+  { brand:'Ashford Online', head:'Finish Your Degree 100% Online', sub:'Transfer up to 90 credits. Classes start monthly.', cta:'REQUEST INFO', seed:'campus', note:'Accreditation varies' },
+  { brand:'', head:'Physics Teachers HATE Him', sub:'Local man aces mechanics exam with one weird trick.', cta:'SEE THE TRICK', seed:'oldbook', note:'' },
+  { brand:'PawPlan Pet Food', head:'Vets Are Switching To Fresh', sub:'Human-grade meals tailored to your dog. 50% off first box.', cta:'GET 50% OFF', seed:'happydog', note:'' }
+];
+const adPick = arr => arr[Math.floor(Math.random() * arr.length)];
+function adPalette(){
+  const h = Math.floor(Math.random() * 360);
+  return {
+    a:`hsl(${h} 80% ${34 + Math.floor(Math.random()*14)}%)`,
+    b:`hsl(${(h + 25 + Math.floor(Math.random()*70)) % 360} 88% ${22 + Math.floor(Math.random()*12)}%)`,
+    cta:`hsl(${(h + 160) % 360} 95% ${58 + Math.floor(Math.random()*10)}%)`
+  };
+}
+function adPhoto(seed, w, h){
+  const s = Math.floor(Math.random() * 999);
+  return `<img src="https://picsum.photos/seed/${seed}${s}/${w}/${h}" alt="" loading="lazy"
+    style="width:${w}px;height:${h}px;object-fit:cover;border-radius:4px;flex-shrink:0;background:#222"
+    onerror="this.style.display='none'">`;
+}
+function adContent(ad, pal){
+  return `
+    <div>
+      <div style="font-size:10px;font-weight:800;letter-spacing:.12em;color:rgba(255,255,255,.75);text-transform:uppercase;margin-bottom:4px">${ad.brand}</div>
+      <div style="font-weight:800;font-size:19px;line-height:1.2;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.4)">${ad.head}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.88);margin-top:5px">${ad.sub}</div>
+      <span style="display:inline-block;font-weight:800;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#15100a;background:${pal.cta};padding:8px 20px;border-radius:20px;margin-top:12px;box-shadow:0 2px 8px rgba(0,0,0,.3)">${ad.cta}</span>
+      ${ad.note ? `<div style="font-size:9px;color:rgba(255,255,255,.55);margin-top:8px">${ad.note}</div>` : ''}
+    </div>`;
+}
+function adLeaderboard(){
+  const ad = adPick(AD_POOL), pal = adPalette();
+  return `
+  <div class="ad-unit">
+    <div class="ad-sponsor">Advertisement · Sponsored</div>
+    <div class="ad-frame" style="background:linear-gradient(115deg,${pal.a},${pal.b})">
+      <div style="display:flex;gap:18px;align-items:center;padding:16px 22px">
+        <div style="flex:1">${adContent(ad, pal)}</div>
+        ${adPhoto(ad.seed, 230, 96)}
+      </div>
+      <span class="ad-choice">ⓘ AdChoices</span>
+    </div>
+  </div>`;
+}
+function adBox(){
+  const ad = adPick(AD_POOL), pal = adPalette();
+  return `
+  <div class="ad-frame" style="background:linear-gradient(150deg,${pal.a},${pal.b});padding:16px">
+    ${adPhoto(ad.seed, 264, 118)}
+    <div style="margin-top:12px">${adContent(ad, pal)}</div>
+    <span class="ad-choice">ⓘ AdChoices</span>
+  </div>`;
+}
+function adVideo(){
+  const ad = adPick(AD_POOL), pal = adPalette();
+  return `
+  <div class="ad-frame" style="background:linear-gradient(160deg,${pal.b},${pal.a});position:relative">
+    <div style="position:relative">
+      ${adPhoto(ad.seed + 'vid', 296, 150)}
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+        <div style="width:52px;height:52px;border-radius:50%;background:rgba(0,0,0,.55);border:2px solid rgba(255,255,255,.85);display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff">▶</div>
+      </div>
+      <div style="position:absolute;top:6px;left:6px;font-size:8.5px;letter-spacing:.1em;color:#fff;background:rgba(0,0,0,.55);padding:1px 6px;border-radius:2px">SPONSORED</div>
+    </div>
+    <div style="padding:12px 14px 14px">${adContent(ad, pal)}
+      <div style="font-size:9px;color:rgba(255,255,255,.55);margin-top:8px">Your content will resume after this message.</div>
+    </div>
+  </div>`;
+}
+
+// Build the shared leaderboard markup before the article templates reference it.
+const AD_LEADER = adLeaderboard();
+
+const RELATED = items => `
+<h2>Related pages ${EDIT}</h2>
+<div class="related">${items.map(([tag, label, href]) =>
+  `<a href="${href || '#/' + label.toLowerCase().replace(/[^a-z]+/g, '')}"><small>${tag}</small><b>${label}</b></a>`).join('')}</div>`;
+
+function comment(user, av, time, text, likes, badge, replies) {
+  const r = (replies || []).map(x => `
+    <div class="comment reply">
+      <div class="avatar ${x[1]}">${x[0][0]}</div>
+      <div class="c-body">
+        <div class="c-meta"><span class="c-user">${x[0]}</span>${x[4] ? `<span class="badge ${x[4]}">${x[4]}</span>` : ''}<span class="c-time">${x[2]}</span></div>
+        <div class="c-text">${x[3]}</div>
+        <div class="c-actions"><a href="#">Reply</a><span class="c-score">👍 ${x[5] || 0}</span><a href="#">Report</a></div>
+      </div>
+    </div>`).join('');
+  return `
+  <div class="comment">
+    <div class="avatar ${av}">${user[0]}</div>
+    <div class="c-body">
+      <div class="c-meta"><span class="c-user">${user}</span>${badge ? `<span class="badge ${badge}">${badge}</span>` : ''}<span class="c-time">${time}</span></div>
+      <div class="c-text">${text}</div>
+      <div class="c-actions"><a href="#">Reply</a><span class="c-score">👍 <b>${likes}</b></span><a href="#">Report</a></div>
+      ${r}
+    </div>
+  </div>`;
+}
+
+const COMMENT_BLOCK = key => {
+  const c = COMMENTS[key];
+  if (!c) return '';
+  return `
+  <section class="comments-section">
+    <div class="cs-head"><h2>Comments (${c.total})</h2><span class="cs-sort">Sort by: <b>Top rated ▾</b></span></div>
+    <div class="reply-box">
+      <div class="avatar av-c">Y</div>
+      <input class="reply-input" type="text" placeholder="Add a comment as YoungExplorer99…">
+      <button class="btn-post">Post</button>
+    </div>
+    ${c.list.map(x => comment(...x)).join('')}
+    <div style="text-align:center;margin-top:18px"><a href="#" class="cat-pill">Load 12 more comments</a></div>
+  </section>`;
+};
+
+/* ---------- comment data ---------- */
+const COMMENTS = {
+  main: { total: 47, list: [
+    ['JouleGuardianMain','e','2 hours ago','Please keep lore speculation on the <a href="#/community">community feed</a>. This article is for verifiable game facts only. Yes, including the monkey friction question.',38,'admin',[
+      ['pEqualsmv','c','2 hours ago','Understood. Moving my 3,000-word theory about the chalkboard being a wormhole immediately.',9],
+      ['MomentumRhinoReal','a','1 hour ago','the monkeys being frictionless explains SO much though',14]]],
+    ['DampingFan42','b','yesterday','Beat Act III with a deck containing zero attack cards. Block-only Fortress builds are genuinely viable and I will not be taking questions.',21,null,[
+      ['TorqueTurtleHater','g','yesterday','questions OR stability amirite',11]]],
+    ['QuicksandSurvivor','f','3 days ago','The fact that quicksand teaches pressure = force ÷ area and PUNISHES YOU for forgetting it means I will never forget it. Effective pedagogy. 10/10 would sink again.',17]
+  ]},
+  bestiary: { total: 23, list: [
+    ['FrictionBoarFan','b','yesterday','Added Comet Newt art. Reminder that its charge windup is ONE turn, which the article now states in bold because people kept losing Stability to it.',15,'mod'],
+    ['GrudgeWatcher','d','2 days ago','PSA: the Pulley Spider steal amount scales with nothing. It is always exactly 3 Supplies. It just chooses violence at a fixed rate.',12,null,[
+      ['VectorVector','a','2 days ago','constant force over constant time. consistent king.',9]]],
+    ['SirLagsAlot','g','4 days ago','Mosquito Swarm ×5 with Impulse Sweep is the single most satisfying moment in the game. Frame it. Put it in a museum.',10]
+  ]},
+  cards: { total: 61, list: [
+    ['InertiaSlothEnjoyer','d','3 days ago','Inertia+ costing 0 Energy is the biggest power spike in the game and nobody talks about it because everyone upgrades their damage cards like cowards.',29,null,[
+      ['JouleGuardianMain','e','3 days ago','Noted for the strategy guide revision. Rude, but noted.',13,'admin']]],
+    ['pEqualsmv','c','5 days ago','Newton\'s Third Law deserves its own article honestly. Taking a hit ON PURPOSE and reflecting it plus three is the most thematic card in any deckbuilder, ever.',18],
+    ['TorqueTurtleHater','g','last week','Downhill Race+ hits four times which strips four shields. The Turtle lobby is in shambles.',11]
+  ]},
+  mechanics: { total: 19, list: [
+    ['GrudgeWatcher','d','5 days ago','Confirmed via testing: grudge markup caps at exactly 90%. At that point the Trader simply refuses to acknowledge currency as a concept.',14,'mod'],
+    ['VectorVector','a','last week','Small correction — streak ×2 adds +2 damage to card effects, not to answer rewards. Article had it right, someone edited it wrong, reverting.',9,null,[
+      ['JamnaniQuoteBot','f','last week','“Show your working.” — source checked, revert approved.',15,'bot']]]
+  ]},
+  locations: { total: 12, list: [
+    ['QuicksandSurvivor','f','last week','Can confirm the shrine CAN give you nothing but wisdom. Got 1 Insight, zero gold, and the distinct feeling of being graded.',8],
+    ['SirLagsAlot','g','2 weeks ago','The rest stop before the boss being guaranteed is such an underrated mercy. Whoever coded that has known true pain.',13]
+  ]},
+  jamnani: { total: 88, list: [
+    ['JamnaniQuoteBot','f','4 hours ago','Added 2 newly documented quotes from the elite cutscene. Archive now at 94 entries. He is very quotable for a man who is not physically present.',31,'bot',[
+      ['JouleGuardianMain','e','3 hours ago','The bot outperforms half our human editors. Sigh.',12,'admin']]],
+    ['MomentumRhinoReal','a','yesterday','Theory (c) — he is just a tired teacher whose jurisdiction expanded — is canon in my heart. Look at the disappointed pose. That is a marking pile pose.',22],
+    ['DampingFan42','b','3 days ago','“Rest is not weakness. It is conservation of energy, applied personally” goes harder than most final bosses.',19]
+  ]},
+  strategy: { total: 134, list: [
+    ['TorqueTurtleHater','g','6 hours ago','Updated Act II section: Rolling Boulder math corrected (26 potential Block, was previously listed as 24 — sorry everyone, my whiteboard lied).',16,'mod'],
+    ['InertiaSlothEnjoyer','d','yesterday','Fortress enjoyers: pair Calibrated Compass with Inertia and you START battles with permanent 4 Block. It never expires. Ever. Sleep well.',27,null,[
+      ['pEqualsmv','c','yesterday','tried this. a baboon hit me for 4 and i felt nothing. emotionally and mechanically.',18]]],
+    ['FrictionBoarFan','b','2 days ago','Execute tempo is criminally underrated against the Resonance Warden. Delete it before cycle beat 3 (that 15 hurts).',14]
+  ]},
+};
+
+const THREADS = [
+  { pin:true, icon:'📌', title:'READ FIRST: Wiki rules & the Monkey Friction Policy', author:'JouleGuardianMain', badge:'admin', replies:41, views:'8.2k', last:'2h ago' },
+  { icon:'🏆', title:'First solo no-Inight run clear — full deck breakdown + save file', author:'InertiaSlothEnjoyer', badge:'', replies:87, views:'14.1k', last:'18m ago', hot:true },
+  { icon:'🦏', title:'The Rhino encounter is actually a brilliant teaching tool and here is my essay', author:'pEqualsmv', badge:'', replies:56, views:'9.8k', last:'1h ago' },
+  { icon:'🎨', title:'[FAN ART] Vector Baboon stealing my pulley (watercolour)', author:'DampingFan42', badge:'', replies:34, views:'6.3k', last:'3h ago', hot:true },
+  { icon:'💀', title:'Grudge reached 6 and the merchant charged me 54 supplies for ROPE. Roast thread.', author:'SirLagsAlot', badge:'', replies:122, views:'21.7k', last:'44m ago', hot:true },
+  { icon:'🧪', title:'Datamine: unused "Storm Circuit" strings found in script.js', author:'VectorVector', badge:'', replies:73, views:'12.4k', last:'5h ago' },
+  { icon:'❓', title:'Lore: who took the Hidden Joules? (compilation of evidence v4)', author:'JamnaniQuoteBot', badge:'bot', replies:210, views:'33.0k', last:'2d ago' },
+  { icon:'🐸', title:'Appreciation post for Kinetic Dart Frogs. They are small and trying their best.', author:'FrictionBoarFan', badge:'mod', replies:19, views:'3.1k', last:'1d ago' },
+];
+
+const COMMUNITY_PAGE = `
+${AD_LEADER.replace('ad-leaderboard" style="position:relative','ad-leaderboard"')}
+<div class="breadcrumb"><a href="#/main">Wiki Home</a> › Community</div>
+<h1 class="article-title">Community feed</h1>
+<div class="title-under">Everything the expedition has been talking about. Be kind. Show your working. ${EDIT}</div>
+
+<div class="comm-tabs">
+  <a href="#" class="comm-tab active">All</a>
+  <a href="#" class="comm-tab">General</a>
+  <a href="#" class="comm-tab">Strategies</a>
+  <a href="#" class="comm-tab">Fan Art</a>
+  <a href="#" class="comm-tab">Lore &amp; Theories</a>
+  <a href="#" class="comm-tab">Datamining</a>
+  <a href="#" class="comm-tab" style="border-style:dashed">＋ Start a discussion</a>
+</div>
+
+<div style="display:flex;gap:12px;margin-bottom:18px">
+  <input class="reply-input" type="text" placeholder="Search discussions…" style="max-width:340px">
+  <span class="cs-sort" style="align-self:center">Sort: <b>Hot 🔥</b></span>
+</div>
+
+${THREADS.map(t => `
+<a href="${t.pin ? '#/community/thread' : '#'}" style="text-decoration:none;color:inherit">
+<div class="thread">
+  <div class="t-icon">${t.icon}</div>
+  <div class="t-main">
+    <div class="t-title">${t.pin ? '<span class="t-pin">Pinned</span>' : ''}${t.title}${t.hot ? '<span class="new-post-dot"></span>' : ''}</div>
+    <div class="t-meta">by <b style="color:#cfd4cf">${t.author}</b>${t.badge ? `<span class="badge ${t.badge}">${t.badge}</span>` : ''} · latest ${t.last}</div>
+  </div>
+  <div class="t-stats"><b>${t.replies}</b>replies<br>${t.views} views</div>
+</div></a>`).join('')}
+
+<h2>About this community ${EDIT}</h2>
+<p>The Jamnanji Wiki community gathers explorers, physicists, and people who have personally been robbed by an Angular Beaver. Moderation is handled by <b>@JouleGuardianMain</b> (bureaucrat) and <b>@FrictionBoarFan</b> (content moderator). JamnaniQuoteBot posts automatically.</p>
+<ul class="wiki-list">
+  <li>Be respectful. Creatures of the Canopy read this feed.</li>
+  <li>Mark all spoilers for Acts II and III.</li>
+  <li>No real-money trading of Warding Charms. There is exactly one per run and it shows.</li>
+</ul>
+
+${COMMENT_BLOCK('jamnani')}
+<div class="cat-links"><b>Categories:</b> <a class="cat-pill" href="#">Community</a> <a class="cat-pill" href="#">Forum</a></div>
+<div class="comments-note">💬 Feed activity synced 4 minutes ago · Powered by Discussions™</div>
+`;
+
+const THREAD_PAGE = `
+<div class="breadcrumb"><a href="#/main">Wiki Home</a> › <a href="#/community">Community</a> › Thread</div>
+<h1 class="article-title" style="font-size:26px">💀 Grudge reached 6 and the merchant charged me 54 supplies for ROPE. Roast thread.</h1>
+<div class="title-under">Started by <b style="color:#fff">SirLagsAlot</b> <span class="badge mod"></span> · 2 days ago · 122 replies · 21.7k views</div>
+<p style="font-size:14.5px;line-height:1.75">Title. I answered one (1) level-3 orbital question wrong in Act I. ONE. And this hooded menace has been compounding interest on my failure like it's his job. Because it IS his job apparently. Post your worst merchant stories below so I feel less alone.</p>
+
+<section class="comments-section" style="margin-top:26px">
+  <div class="cs-head"><h2>Replies (${THREADS.find(t=>t.replies===122).replies})</h2><span class="cs-sort">Sort by: <b>Top rated ▾</b></span></div>
+  ${comment('GrudgeWatcher','d','2 days ago','The markup formula is public knowledge and people STILL get surprised. min(90%, 15% × grudge). He literally cannot help himself. It is physics-adjacent behaviour.',44,'mod',[
+    ['SirLagsAlot','g','2 days ago','i don\'t want him to help himself i want him to CHARGE ME LESS',31]])}
+  ${comment('pEqualsmv','c','2 days ago','Economically speaking, the grudge system models reputational risk pricing with surprising fidelity. You devalued yourself the moment you said “momentum is measured in newtons”. The market noticed.',37,null,[
+    ['SirLagsAlot','g','2 days ago','it was the rhino question!! the rhino was MOVING AT SIX METRES PER SECOND, THE ANSWER IS 3000, I KNOW IT\'S 3000 NOW',52],
+    ['MomentumRhinoReal','a','2 days ago','“now” doing a lot of work in that sentence',40]])}
+  ${comment('InertiaSlothEnjoyer','d','2 days ago','Pro strat: buy the Warding Charm BEFORE Act II when your grudge is still 0–1. Charm early, charm often. This message brought to you by the Block engine gang.',28)}
+  ${comment('JouleGuardianMain','e','2 days ago','Locking nothing. This thread is a national treasure.',33,'admin')}
+  ${comment('JamnaniQuoteBot','f','1 day ago','Relevant archive entry: “His prices are elastic. Your patience should not be.” — Mr Jamnani, location quip #2.',29,'bot',[
+    ['FrictionBoarFan','b','1 day ago','the bot choosing violence AND relevance',17,'mod']])}
+  <div style="text-align:center;margin-top:18px"><a href="#" class="cat-pill">Load 116 more replies</a></div>
+</section>
+<div class="cat-links"><b>Categories:</b> <a class="cat-pill" href="#">Humour</a> <a class="cat-pill" href="#">Merchant Crimes</a></div>
+`;
+
+/* ================================================================ ARTICLES */
+
+const ARTICLES = {
+
+/* ---------------- MAIN ---------------- */
+main: `
+<div class="ad-sponsor" style="text-align:left">Advertisement</div>
+${AD_LEADER}
+<div class="stub">⚠️ <b>Spoiler warning:</b> this article contains unmarked spoilers for all three acts of <i>Jamnanji: The Hidden Joule</i>.</div>
+<div class="breadcrumb"><a href="#/main">Wiki Home</a> › Games › Jamnanji: The Hidden Joule</div>
+<h1 class="article-title">Jamnanji: The Hidden Joule</h1>
+<div class="title-under"><i>This page is about the game.</i> For the location, see <a href="#/locations">Jamnanji (realm)</a>. For sealed journeys, see <a class="redlink" href="#">Storm Circuit</a> and <a class="redlink" href="#">Resonant Depths</a>. ${EDIT}</div>
+
+<aside class="infobox">
+  <div class="ib-title">Jamnanji: The Hidden Joule</div>
+  <div class="ib-image"><img src="${A}jamnanji-menu-illustrated.png" alt="Jamnanji title screen artwork"></div>
+  <table>
+    <tr><th>Developer(s)</th><td>VibeCoding</td></tr>
+    <tr><th>Publisher</th><td>VibeCoding</td></tr>
+    <tr><th>Engine</th><td>Vanilla JavaScript</td></tr>
+    <tr><th>Platform(s)</th><td>Browser (HTML5)</td></tr>
+    <tr><th>Release</th><td>Build 0.3 (Act I–III)</td></tr>
+    <tr><th>Genre(s)</th><td>Roguelike deckbuilder, educational physics RPG</td></tr>
+    <tr><th>Mode(s)</th><td>Single-player, 3 save slots</td></tr>
+    <tr><th>Journeys</th><td>Mechanics (playable) · Electricity · Waves (sealed)</td></tr>
+  </table>
+  <div class="ib-caption">Title screen artwork, Build 0.3.</div>
+</aside>
+
+<div class="toc"><b>Contents</b><ol>
+<li><a href="#overview">Overview</a></li>
+<li><a href="#gameplay">Gameplay</a></li>
+<li><a href="#story">Story</a></li>
+<li><a href="#acts">Acts &amp; Journeys</a></li>
+<li><a href="#development">Development</a></li>
+<li><a href="#reception">Reception</a></li>
+<li><a href="#trivia">Trivia</a></li>
+</ol></div>
+
+<h2 id="overview">Overview ${EDIT}</h2>
+<p><b>Jamnanji: The Hidden Joule</b> is a browser-based roguelike deckbuilder in which the laws of classical mechanics are enforced literally, and by hostile fauna. The player takes the role of a student pulled through a classroom chalkboard into <b>Jamnanji</b>, a jungle realm where every encounter, hazard and temple mechanism is resolved by answering physics questions under pressure.</p>
+<p>The game is structured around three realms — Mechanics, Electricity and Waves — each guarded by its own Hidden Joule. Only the <b>Joule of Mechanics</b> journey is currently playable, spanning three acts: Newton's Canopy, The Rotorwilds and The Resonant Ascent.<sup class="cn">[citation needed]</sup></p>
+
+<blockquote class="quote">“Here, the laws of physics are not merely equations. They are laws. And unlike certain students, the jungle follows them.”<cite>— Mr Jamnani, prologue cutscene</cite></blockquote>
+
+<h2 id="gameplay">Gameplay ${EDIT}</h2>
+<figure class="thumb"><img src="${A}battle-act-1.png" alt="Combat in Newton's Canopy"><figcaption>The Act I battlefield. Committed cards resolve only after the turn's question is answered correctly.</figcaption></figure>
+<p>Each run generates a fresh branching map of landmark nodes. Combat encounters use a hybrid system: the player plays <a href="#/cards">cards</a> from a hand of five using Energy, but the committed cards only resolve when that turn's <b>physics question is answered correctly</b> — the question functions as the turn's attack roll. A wrong answer causes all committed cards to fizzle to one third of their force, breaks the answer streak, raises the merchant's prices via the hidden <b>grudge</b> counter, and lets enemy packs strike back.</p>
+<ul class="wiki-list">
+  <li><b>Stability</b> — the player health stat. Starts at 60/60.</li>
+  <li><b>Energy</b> — 3 per turn by default, spent to play cards.</li>
+  <li><b>Block</b> — absorbs incoming damage; expires at the start of each turn unless <i>Inertia</i> is in play.</li>
+  <li><b>Insight</b> — a meta-resource used to eliminate one wrong answer mid-battle ("Insight strike") and to trade at shops.</li>
+  <li><b>Supplies</b> — currency earned from bounties and rewards.</li>
+</ul>
+<p>See <a href="#/mechanics">Game mechanics</a> for the complete ruleset.</p>
+
+<h2 id="story">Story ${EDIT}</h2>
+<figure class="thumb left"><img src="${A}cutscene-parlor.png" alt="The parlor cutscene where the board splits open"><figcaption>"The board splits open." The prologue cutscene.</figcaption></figure>
+<p>A student dozes off during Mr Jamnani's lesson on inertia. The chalkboard splits open, vines coil out, and the student falls into Jamnanji — a world once held in equilibrium by three <b>Hidden Joules</b>. Since the Joules were taken, the paths shift, the temples move, and the creatures have become "mechanically unreasonable."</p>
+<p>Guided (and perpetually disappointed) by the disembodied voice of <a href="#/jamnani">Mr Jamnani</a>, the explorer crosses Newton's Canopy, defeats the <b>Unstoppable Object</b> at the temple causeway, grinds past the <b>Angular Colossus</b> of the Rotorwilds, and finally stills the <b>Resonant Heart</b> at the temple summit, recovering the Joule of Mechanics. The victory scene teases the Storm Circuit — the sealed Electricity journey.</p>
+
+<h2 id="acts">Acts &amp; Journeys ${EDIT}</h2>
+<div class="img-gallery">
+  <figure><img src="${A}journey-mechanics.png" alt="Mechanics monument"><figcaption>Mechanics — Newton's Canopy (playable)</figcaption></figure>
+  <figure><img src="${A}journey-electricity.png" alt="Electricity monument"><figcaption>Electricity — The Storm Circuit (sealed)</figcaption></figure>
+  <figure><img src="${A}journey-waves.png" alt="Waves monument"><figcaption>Waves — The Resonant Depths (sealed)</figcaption></figure>
+</div>
+<table class="wikitable"><caption>The three acts of the Mechanics journey</caption>
+<tr><th>Act</th><th>Name</th><th>Floors</th><th>Curriculum topics</th><th>Boss</th></tr>
+<tr><td>I</td><td>Newton's Canopy</td><td>8</td><td>Momentum, Energy, Centre of mass, Relative velocity</td><td><a href="#/bestiary">The Unstoppable Object</a> (Joule Guardian)</td></tr>
+<tr><td>II</td><td>The Rotorwilds</td><td>8</td><td>Rotational motion, Rolling</td><td><a href="#/bestiary">The Angular Colossus</a></td></tr>
+<tr><td>III</td><td>The Resonant Ascent</td><td>9</td><td>Circular motion, Orbits, SHM &amp; resonance</td><td><a href="#/bestiary">The Resonant Heart</a></td></tr>
+</table>
+
+<h2 id="development">Development ${EDIT}</h2>
+<p>The game was built as a single-page vanilla JavaScript application with no framework or external assets pipeline, notable among fans for shipping an entire deckbuilding engine, procedural map generator and bestiary in three source files (<code>script.js</code>, <code>cards.js</code>, <code>questions.js</code>). The question bank is written in a scenario-first NCEA Level 3 style, with distractors deliberately modelled on common misconception chains rather than random filler.<sup class="cn">[citation needed]</sup></p>
+
+<h2 id="reception">Reception ${EDIT}</h2>
+<p>Reception among the (extremely localised) player base has been positive, particularly praise for:</p>
+<ul class="wiki-list">
+  <li>The "question as attack roll" mechanic, described by one editor as "<i>Slay the Spire, but the RNG is your own education</i>".</li>
+  <li>Mr Jamnani's commentary, widely quoted in the community hub.</li>
+  <li>The merchant's dynamic pricing: every wrong answer raises his markup by up to 15%, capped at 90%. This has been received "about as well as expected".</li>
+</ul>
+<p>Common criticisms include the difficulty spike when the Inertia Sloth appears before the player has drawn any Block cards, and hornets.</p>
+
+<h2 id="trivia">Trivia ${EDIT}</h2>
+<ul class="wiki-list">
+  <li>The game's title is a play on the joule (J), the SI unit of energy — and, presumably, a teacher's surname.</li>
+  <li>Every card in the game is named after the mechanics concept it teaches; upgraded versions are marked with a plus sign (+).</li>
+  <li>The prologue choice "Why are the monkeys frictionless?" reveals they are not, and never have been, frictionless.</li>
+  <li>The shrine of Significant Figures will round the player's remaining dignity down to zero.</li>
+  <li>Enemy intent icons are telegraphed openly — ⚔ shows exact damage — because, as Jamnani puts it, "the jungle shows its working."</li>
+</ul>
+
+${RELATED([['Systems','Game mechanics','#/mechanics'],['Combat','Bestiary','#/bestiary'],['Characters','Mr Jamnani','#/jamnani'],['Guides','Strategy guide','#/strategy'],['World','Locations','#/locations']])}
+
+<div class="navbox"><div class="navbox-title"><a href="#/main" style="color:#fff">v · d · e Jamnanji: The Hidden Joule</a></div><table>
+<tr><td class="navbox-group">Systems</td><td><a href="#/mechanics">Game mechanics</a> · <a href="#/cards">Cards</a> · <a href="#/strategy">Strategy guide</a></td></tr>
+<tr><td class="navbox-group">World</td><td><a href="#/locations">Locations</a> · <a href="#/jamnani">Mr Jamnani</a> · <a href="#/bestiary">Bestiary</a></td></tr>
+</table></div>
+<div class="cat-links"><b>Categories:</b> <a class="cat-pill" href="#">Games</a><a class="cat-pill" href="#">Roguelike deckbuilders</a><a class="cat-pill" href="#">Educational games</a><a class="cat-pill" href="#">2026 releases</a></div>
+${COMMENT_BLOCK('main')}
+<div class="comments-note">💬 Last edited 2 hours ago by <a href="#">JouleGuardianMain</a> · Page views today: 3,204</div>
+`,
+
+/* ---------------- BESTIARY ---------------- */
+bestiary: `
+<div class="hatnote">For pack composition rules, see <a href="#/mechanics">Game mechanics § Enemy packs</a>.</div>
+<div class="breadcrumb"><a href="#/main">Wiki Home</a> › <a href="#/main">Game content</a> › Bestiary</div>
+<h1 class="article-title">Bestiary</h1>
+<div class="title-under">Category page listing every hostile creature in Jamnanji. ${EDIT}</div>
+
+<aside class="infobox">
+  <div class="ib-title">Vector Baboon</div>
+  <div class="ib-image"><img src="${A}enemy-baboon.png" alt="Vector Baboon" style="aspect-ratio:1/1;object-fit:contain;padding:10px;width:calc(100% - 20px)"></div>
+  <table>
+    <tr><th>Type</th><td>Soldier</td></tr>
+    <tr><th>Act</th><td>I — Newton's Canopy</td></tr>
+    <tr><th>HP</th><td>2</td></tr>
+    <tr><th>Bounty</th><td>8 Supplies</td></tr>
+    <tr><th>Move set</th><td>Cycle (4 / 4)</td></tr>
+    <tr><th>Loot behaviour</th><td>None — steals pulleys, not Supplies</td></tr>
+  </table>
+  <div class="ib-caption">"Absolutely no laboratory etiquette."</div>
+</aside>
+
+<p>The bestiary of <i>Jamnanji</i> contains <b>21 regular species</b>, <b>3 elite creatures</b> and <b>3 guardians</b>, distributed across the three acts. Every unit openly telegraphs its next action with an intent icon (⚔ damage, ⋯ charging, ⚔⛁ steal, 🛡 shield). All HP values are low by deckbuilder standards because damage is resolved through answered questions rather than raw card output alone.</p>
+
+<h2>Movesets ${EDIT}</h2>
+<table class="wikitable">
+<tr><th>Pattern</th><th>Behaviour</th><th>Counter-play</th></tr>
+<tr><td><b>Cycle</b></td><td>Repeats a fixed damage sequence forever (e.g. 6, 6, 13)</td><td>Memorise the big hit; bank Block the turn before it lands</td></tr>
+<tr><td><b>Charge</b></td><td>Telegraphs ⋯ for windup rounds, then unleashes a burst</td><td>Use windup turns to stack Block or burst the charger down</td></tr>
+<tr><td><b>Drain</b></td><td>Strikes AND steals Supplies (⛁)</td><td>Priority target — kills your shop economy</td></tr>
+<tr><td><b>Guard</b></td><td>Alternates shield turns with strikes</td><td>Torque-type attacks double into shields; multi-hits strip them</td></tr>
+<tr><td><b>Ramp</b></td><td>Starts light, hits harder each time it connects</td><td>Kill fast or keep it Weakened permanently</td></tr>
+</table>
+
+<h2>Act I — Newton's Canopy ${EDIT}</h2>
+<table class="wikitable"><caption>Momentum &amp; energy tier</caption>
+<tr><th colspan="2">Name</th><th>Role</th><th>HP</th><th>Bounty</th><th>Moveset</th><th>Notes</th></tr>
+<tr><td>${mobImg('baboon')}</td><td>♣ <b>Vector Baboon</b></td><td>Soldier</td><td>2</td><td>8</td><td>Cycle 4/4</td><td>The mascot. Appears in Act II pools too, somehow.</td></tr>
+<tr><td>${mobImg('frog')}</td><td>◇ <b>Kinetic Dart Frog</b></td><td>Swarm ×3</td><td>1</td><td>5</td><td>Cycle 3/3</td><td>Three bodies, one species. Sweep food.</td></tr>
+<tr><td>${mobImg('parrot')}</td><td>¶ <b>Scalar Parrot</b></td><td>Soldier</td><td>2</td><td>8</td><td>Cycle 2/6</td><td>The 6 hits hard for Act I. Respect the second beat.</td></tr>
+<tr><td>${mobImg('sloth')}</td><td>∩ <b>Inertia Sloth</b></td><td>Heavy</td><td>3</td><td>12</td><td>Charge (2 windup, burst 11)</td><td>Objects at rest remain at rest. Then don't.</td></tr>
+<tr><td>${mobImg('spider')}</td><td>✕ <b>Pulley Spider</b></td><td>Soldier</td><td>2</td><td>9</td><td>Drain 3 + steals 3</td><td>Steals Supplies. Kill first.</td></tr>
+<tr><td>${mobImg('viper')}</td><td>∿ <b>Elastic Viper</b></td><td>Soldier</td><td>2</td><td>9</td><td>Ramp 2 (+2 growth)</td><td>Hooke's law, weaponised.</td></tr>
+<tr><td>${mobImg('orangutan')}</td><td>⌇ <b>Pendulum Orangutan</b></td><td>Heavy</td><td>3</td><td>12</td><td>Cycle 4/8</td><td>Swings between modest and alarming.</td></tr>
+<tr><td>${mobImg('boar')}</td><td>≜ <b>Friction Boar</b></td><td>Heavy</td><td>4</td><td>14</td><td>Cycle 6/6</td><td>Tankiest regular of Act I.</td></tr>
+</table>
+
+<h2>Act II — The Rotorwilds ${EDIT}</h2>
+<table class="wikitable"><caption>Rotation &amp; rolling tier</caption>
+<tr><th colspan="2">Name</th><th>Role</th><th>HP</th><th>Bounty</th><th>Moveset</th><th>Notes</th></tr>
+<tr><td>${mobImg('rotor')}</td><td>✳ <b>Rotor Monkey</b></td><td>Soldier</td><td>2</td><td>9</td><td>Cycle 5/5</td><td>Everything here turns.</td></tr>
+<tr><td>${mobImg('falcon')}</td><td>◭ <b>Gyro Falcon</b></td><td>Soldier</td><td>2</td><td>10</td><td>Cycle 4/8</td><td>Conserves angular momentum at your expense.</td></tr>
+<tr><td>${mobImg('turtle')}</td><td>⬡ <b>Torque Turtle</b></td><td>Heavy</td><td>4</td><td>13</td><td>Guard (shield/strike 4)</td><td>Bring Torque or multi-hit cards.</td></tr>
+<tr><td>${mobImg('boulder')}</td><td>● <b>Rolling Boulder</b></td><td>Heavy</td><td>3</td><td>12</td><td>Charge (2 windup, burst 13)</td><td>v = rω. The r is enormous.</td></tr>
+<tr><td>${mobImg('beaver')}</td><td>⌒ <b>Angular Beaver</b></td><td>Soldier</td><td>3</td><td>11</td><td>Drain 4 + steals 4</td><td>Dams your wallet specifically.</td></tr>
+<tr><td>${mobImg('flywheel')}</td><td>◎ <b>Flywheel Lemur</b></td><td>Heavy</td><td>3</td><td>12</td><td>Ramp 3 (+3 growth)</td><td>Stores rotational energy. Releases it into you.</td></tr>
+</table>
+
+<h2>Act III — The Resonant Ascent ${EDIT}</h2>
+<table class="wikitable"><caption>Circles, orbits &amp; oscillation tier</caption>
+<tr><th colspan="2">Name</th><th>Role</th><th>HP</th><th>Bounty</th><th>Moveset</th><th>Notes</th></tr>
+<tr><td>${mobImg('panther')}</td><td>☾ <b>Centripetal Panther</b></td><td>Heavy</td><td>3</td><td>11</td><td>Cycle 6/6</td><td>Always accelerating toward you. Literally.</td></tr>
+<tr><td>${mobImg('howler')}</td><td>≫ <b>Resonant Howler</b></td><td>Heavy</td><td>3</td><td>12</td><td>Ramp 3 (+3 growth)</td><td>Amplifies if you let it drive at natural frequency.</td></tr>
+<tr><td>${mobImg('owl')}</td><td>◉ <b>Orbital Owl</b></td><td>Heavy</td><td>4</td><td>13</td><td>Guard (shield/strike 5)</td><td>Weightless until it isn't.</td></tr>
+<tr><td>${mobImg('mosquito')}</td><td>· <b>Damping Mosquito Swarm</b></td><td>Swarm ×5</td><td>1</td><td>4</td><td>Cycle 2/2</td><td>Five bodies. Individually trivial. Collectively a war crime.</td></tr>
+<tr><td>${mobImg('ape')}</td><td>⏦ <b>Harmonic Ape</b></td><td>Heavy</td><td>3</td><td>12</td><td>Cycle 3/9</td><td>Displacement small, amplitude terrifying.</td></tr>
+<tr><td>${mobImg('comet')}</td><td>☄ <b>Comet Newt</b></td><td>Soldier</td><td>2</td><td>10</td><td>Charge (1 windup, burst 12)</td><td>Only ONE windup turn. Do not dawdle.</td></tr>
+</table>
+
+<h2>Elites ${EDIT}</h2>
+<div class="img-gallery full-art">
+  <figure><img src="${A}enemy-rhino.png" alt="Momentum Rhino"><figcaption>♜ Momentum Rhino (Act I)</figcaption></figure>
+  <figure><img src="${A}enemy-colossus.png" alt="Torque Colossus"><figcaption>♜ Torque Colossus (Act II)</figcaption></figure>
+  <figure><img src="${A}enemy-warden.png" alt="Resonance Warden"><figcaption>♜ Resonance Warden (Act III)</figcaption></figure>
+</div>
+<table class="wikitable">
+<tr><th>Name</th><th>Act</th><th>HP</th><th>Bounty</th><th>Moveset</th><th>Escorted by</th></tr>
+<tr><td>Momentum Rhino</td><td>I</td><td>4</td><td>24</td><td>Cycle 6/6</td><td>One cheap Act I mob</td></tr>
+<tr><td>Torque Colossus</td><td>II</td><td>5</td><td>26</td><td>Cycle 7/7/<b>14</b></td><td>One cheap Act II mob</td></tr>
+<tr><td>Resonance Warden</td><td>III</td><td>6</td><td>28</td><td>Cycle 8/8/<b>15</b></td><td>One cheap Act III mob</td></tr>
+</table>
+<p>All elites field level-3 questions (hardest tier) and always bring a companion. The Rhino's story encounter famously asks the player to compute p = mv for a 500 kg rhino at 6 m/s — 3,000 kg·m/s, in case you were about to get flattened.</p>
+
+<h2>Guardians (Bosses) ${EDIT}</h2>
+<div class="img-gallery full-art">
+  <figure><img src="${A}enemy-boss-joule.png" alt="The Unstoppable Object"><figcaption>The Unstoppable Object — Joule Guardian</figcaption></figure>
+  <figure><img src="${A}enemy-boss-angular.png" alt="The Angular Colossus"><figcaption>The Angular Colossus</figcaption></figure>
+  <figure><img src="${A}enemy-boss-resonant.png" alt="The Resonant Heart"><figcaption>The Resonant Heart</figcaption></figure>
+</div>
+<table class="wikitable">
+<tr><th>Guardian</th><th>Act</th><th>HP</th><th>Moveset</th><th>Final question</th></tr>
+<tr><td><b>The Unstoppable Object</b> (Joule Guardian)</td><td>I</td><td>8</td><td>Cycle 6/6/13</td><td>"What is the rate of change of momentum equal to?" (Resultant force)</td></tr>
+<tr><td><b>The Angular Colossus</b></td><td>II</td><td>8</td><td>Cycle 6/6/13</td><td>"The rotational analogue of force is…" (Torque)</td></tr>
+<tr><td><b>The Resonant Heart</b></td><td>III</td><td>8</td><td>Cycle 6/6/13</td><td>"Resonance occurs when…" (driving frequency equals natural frequency)</td></tr>
+</table>
+<blockquote class="quote">“Every object can be stopped. Momentum can be changed. That is precisely what it fears about you.”<cite>— Mr Jamnani, boss intro cutscene</cite></blockquote>
+
+${RELATED([['Combat','Strategy guide','#/strategy'],['Systems','Game mechanics','#/mechanics'],['World','Locations','#/locations'],['Characters','Mr Jamnani','#/jamnani']])}
+
+<div class="navbox"><div class="navbox-title"><a href="#/bestiary" style="color:#fff">v · d · e Bestiary</a></div><table>
+<tr><td class="navbox-group">Act I</td><td>Baboon · Frog · Parrot · Sloth · Spider · Viper · Orangutan · Boar · <b>Rhino</b> · <b>Joule Guardian</b></td></tr>
+<tr><td class="navbox-group">Act II</td><td>Rotor Monkey · Falcon · Turtle · Boulder · Beaver · Flywheel Lemur · <b>Colossus</b></td></tr>
+<tr><td class="navbox-group">Act III</td><td>Panther · Howler · Owl · Mosquito Swarm · Ape · Comet Newt · <b>Warden</b> · <b>Resonant Heart</b></td></tr>
+</table></div>
+<div class="cat-links"><b>Categories:</b> <a class="cat-pill" href="#">Enemies</a><a class="cat-pill" href="#">Bestiary</a><a class="cat-pill" href="#">Game content</a></div>
+${COMMENT_BLOCK('bestiary')}
+<div class="comments-note">💬 Last edited yesterday by <a href="#">FrictionBoarFan</a> · Page views today: 1,982</div>
+`,
+
+/* ---------------- CARDS ---------------- */
+cards: `
+<div class="breadcrumb"><a href="#/main">Wiki Home</a> › <a href="#/main">Systems</a> › Cards</div>
+<h1 class="article-title">Cards</h1>
+<div class="title-under">Complete list of the 30 cards implemented in Build 0.3. ${EDIT}</div>
+<aside class="infobox">
+  <div class="ib-title">Newton's Third Law</div>
+  <div class="ib-image"><img src="${A}cutscene-rhino-clearing.png" alt="Conservation of momentum, demonstrated by a rhino"></div>
+  <table>
+    <tr><th>Cost</th><td>1 Energy</td></tr>
+    <tr><th>Type</th><td>Attack</td></tr>
+    <tr><th>Topic</th><td>Momentum</td></tr>
+    <tr><th>Rarity</th><td><span class="rarity-c">Common</span></td></tr>
+    <tr><th>Target</th><td>Self</td></tr>
+    <tr><th>Effect</th><td>Deal damage equal to what you took last turn (+3 when upgraded)</td></tr>
+  </table>
+  <div class="ib-caption">Pictured: conservation of momentum, live field test.</div>
+</aside>
+
+<p><b>Cards are the verbs of combat.</b> Each card corresponds to a real mechanics concept; its name and effect are designed to teach the idea it carries. Cards are played during the card phase, then resolve only after the turn's physics question is answered correctly (see <a href="#/mechanics">Game mechanics</a>). Upgraded copies replace their numbers exactly and are suffixed with <b>+</b>.</p>
+
+<h2>Rarities ${EDIT}</h2>
+<ul class="wiki-list">
+  <li><span class="rarity-s">Starter</span> — begin every run with these (4× Strike, 4× Brace, Field Study, Impulse Sweep). Never offered as rewards.</li>
+  <li><span class="rarity-c">Common</span> — 70% of reward offers. Must match the current act's curriculum topics.</li>
+  <li><span class="rarity-r">Rare</span> — 30% of reward offers. Include run-defining powers like <i>Inertia</i> and <i>Resonance</i>.</li>
+</ul>
+
+<h2>Full Card List ${EDIT}</h2>
+<table class="wikitable"><caption>Starter deck</caption>
+<tr><th>Card</th><th>Cost</th><th>Type</th><th>Effect</th><th>Upgrade+</th></tr>
+<tr><td><b>Strike</b></td><td>1</td><td>Attack</td><td>Deal 5 damage.</td><td>8 damage</td></tr>
+<tr><td><b>Brace</b></td><td>1</td><td>Skill</td><td>Gain 6 Block.</td><td>9 Block</td></tr>
+<tr><td><b>Field Study</b></td><td>1</td><td>Skill</td><td>Deal 1 damage. Gain 1 Insight.</td><td>2 dmg, 2 Insight</td></tr>
+<tr><td><b>Impulse Sweep</b></td><td>2</td><td>Attack</td><td>Deal 4 damage to ALL. Shatters shields.</td><td>6 damage</td></tr>
+</table>
+
+<table class="wikitable"><caption>Common cards</caption>
+<tr><th>Card</th><th>Cost</th><th>Type</th><th>Topic</th><th>Effect</th><th>Upgrade+</th></tr>
+<tr><td><b>Newton's Third Law</b></td><td>1</td><td>Attack</td><td>Momentum</td><td>Damage equal to what you took last turn.</td><td>+3 bonus</td></tr>
+<tr><td><b>Conservation of Energy</b></td><td>2</td><td>Skill</td><td>Energy</td><td>Convert all Block into damage.</td><td>Regain half as Block</td></tr>
+<tr><td><b>Kinetic Strike</b></td><td>2</td><td>Attack</td><td>Energy</td><td>Deal 9 damage.</td><td>13</td></tr>
+<tr><td><b>Damping Field</b></td><td>1</td><td>Skill</td><td>SHM</td><td>Enemies deal −3 for 2 turns.</td><td>−4 for 3 turns</td></tr>
+<tr><td><b>Friction</b></td><td>1</td><td>Skill</td><td>Rolling</td><td>Weaken target: −2 dmg for 2 turns.</td><td>−3 for 3 turns</td></tr>
+<tr><td><b>Torque</b></td><td>1</td><td>Attack</td><td>Rotational</td><td>3 damage, doubled vs shielded.</td><td>5</td></tr>
+<tr><td><b>Stored Potential</b></td><td>0</td><td>Skill</td><td>Energy</td><td>Gain 4 Block. Draw 1.</td><td>6 Block</td></tr>
+<tr><td><b>Impulse Transfer</b></td><td>1</td><td>Attack</td><td>Momentum</td><td>4 damage + 4 Block.</td><td>6 + 6</td></tr>
+<tr><td><b>Mass Distribution</b></td><td>1</td><td>Skill</td><td>CoM</td><td>7 Block. Draw 1.</td><td>10 Block</td></tr>
+<tr><td><b>Closing Speed</b></td><td>1</td><td>Attack</td><td>Relative</td><td>7 damage.</td><td>10</td></tr>
+<tr><td><b>Frame Shift</b></td><td>1</td><td>Skill</td><td>Relative</td><td>5 Block. Draw 1.</td><td>8 Block</td></tr>
+<tr><td><b>Angular Acceleration</b></td><td>1</td><td>Attack</td><td>Rotational</td><td>3 damage twice.</td><td>3 × 3 hits</td></tr>
+<tr><td><b>No-Slip Contact</b></td><td>1</td><td>Attack</td><td>Rolling</td><td>5 damage + 5 Block.</td><td>7 + 7</td></tr>
+<tr><td><b>Centripetal Force</b></td><td>1</td><td>Attack</td><td>Circular</td><td>6 damage + Weaken 2 this turn.</td><td>9 + Weaken 3</td></tr>
+<tr><td><b>Banked Curve</b></td><td>1</td><td>Skill</td><td>Circular</td><td>7 Block. Draw 1.</td><td>10 Block</td></tr>
+<tr><td><b>Gravity Assist</b></td><td>1</td><td>Attack</td><td>Orbital</td><td>5 damage. Draw 1.</td><td>8</td></tr>
+<tr><td><b>Low Orbit</b></td><td>1</td><td>Attack</td><td>Orbital</td><td>3 damage twice.</td><td>4 × 2</td></tr>
+</table>
+
+<table class="wikitable"><caption>Rare cards</caption>
+<tr><th>Card</th><th>Cost</th><th>Type</th><th>Topic</th><th>Effect</th><th>Upgrade+</th></tr>
+<tr><td><b>Resonance</b></td><td>2</td><td>Skill</td><td>SHM</td><td>Your next card this turn resolves TWICE.</td><td>Costs 1</td></tr>
+<tr><td><b>Inertia</b></td><td>1</td><td>Power</td><td>CoM</td><td>Your Block no longer expires this battle.</td><td>Costs 0</td></tr>
+<tr><td><b>Pendulum Swing</b></td><td>2</td><td>Attack</td><td>SHM</td><td>9 now, 4 next turn, then 9 again.</td><td>13 / 6 / 13</td></tr>
+<tr><td><b>Inelastic Impact</b></td><td>2</td><td>Attack</td><td>Momentum</td><td>11 damage + Weaken 2 for 2 turns.</td><td>15 + Weaken 3</td></tr>
+<tr><td><b>Stable System</b></td><td>2</td><td>Skill</td><td>CoM</td><td>10 Block. Draw 2.</td><td>14 Block</td></tr>
+<tr><td><b>Vector Sum</b></td><td>2</td><td>Attack</td><td>Relative</td><td>9 damage + 9 Block.</td><td>13 + 13</td></tr>
+<tr><td><b>Flywheel Reserve</b></td><td>1</td><td>Skill</td><td>Rotational</td><td>+1 Energy next turn. Draw 1.</td><td>+2 Energy</td></tr>
+<tr><td><b>Downhill Race</b></td><td>2</td><td>Attack</td><td>Rolling</td><td>4 damage three times.</td><td>5 × 4 hits</td></tr>
+<tr><td><b>Vertical Loop</b></td><td>2</td><td>Attack</td><td>Circular</td><td>11 damage + 7 Block.</td><td>15 + 10</td></tr>
+<tr><td><b>Escape Velocity</b></td><td>2</td><td>Attack</td><td>Orbital</td><td>12 damage, doubled below half HP.</td><td>16</td></tr>
+</table>
+
+<h2>Field Artifacts &amp; Major Discoveries ${EDIT}</h2>
+<table class="wikitable">
+<tr><th colspan="2">Field Artifacts (relics)</th><th colspan="2">Major Discoveries</th></tr>
+<tr><td>⌖ Calibrated Compass</td><td>Begin battles with 4 Block</td><td>⚡ Deep Reserves</td><td>+1 max Energy every battle</td></tr>
+<tr><td>ϟ Emergency Capacitor</td><td>+1 Energy on turn 1</td><td>▣ Reinforced Notebook</td><td>+10 max Stability, heal 10</td></tr>
+<tr><td>◉ Surveyor's Lens</td><td>+1 card in reward offers</td><td>✦ Prismatic Index</td><td>+1 Insight per victory</td></tr>
+<tr><td>◎ Stability Coil</td><td>Heal 3 per victorious battle</td><td></td><td></td></tr>
+</table>
+
+<h2>Gallery ${EDIT}</h2>
+<div class="img-gallery">
+  <figure><img src="${A}battle-act-2.png" alt="Rotorwilds battlefield"><figcaption>A mid-battle hand in the Rotorwilds (Act II arena)</figcaption></figure>
+  <figure><img src="${A}battle-act-3.png" alt="Resonant Ascent battlefield"><figcaption>The temple summit arena (Act III)</figcaption></figure>
+  <figure><img src="${A}cutscene-joule-chamber.png" alt="The Joule chamber"><figcaption>The cradle chamber where the Hidden Joule rises</figcaption></figure>
+</div>
+
+${RELATED([['Combat','Bestiary','#/bestiary'],['Builds','Strategy guide','#/strategy'],['Rules','Game mechanics','#/mechanics']])}
+
+<div class="cat-links"><b>Categories:</b> <a class="cat-pill" href="#">Cards</a><a class="cat-pill" href="#">Game mechanics</a><a class="cat-pill" href="#">Lists</a></div>
+${COMMENT_BLOCK('cards')}
+<div class="comments-note">💬 Last edited 3 days ago by <a href="#">InertiaSlothEnjoyer</a> · Page views today: 1,107</div>
+`,
+
+/* ---------------- MECHANICS ---------------- */
+mechanics: `
+<div class="breadcrumb"><a href="#/main">Wiki Home</a> › <a href="#/main">Systems</a> › Game mechanics</div>
+<h1 class="article-title">Game mechanics</h1>
+<div class="title-under">${EDIT}</div>
+<div class="toc"><b>Contents</b><ol>
+<li><a href="#stats">Core stats</a></li>
+<li><a href="#battle-loop">The battle loop</a></li>
+<li><a href="#questions">Questions &amp; difficulty levels</a></li>
+<li><a href="#packs">Enemy packs &amp; map generation</a></li>
+<li><a href="#economy">Economy &amp; the grudge system</a></li>
+<li><a href="#save">Saving</a></li>
+</ol></div>
+
+<h2 id="stats">Core stats ${EDIT}</h2>
+<table class="wikitable">
+<tr><th>Stat</th><th>Base value</th><th>Description</th></tr>
+<tr><td><b>Stability</b></td><td>60 / 60</td><td>Health. Reaching zero ends the run with the defeat cutscene.</td></tr>
+<tr><td><b>Energy</b></td><td>3 per turn</td><td>Spent to play cards. +1 at streak ×3; modified by artifacts/discoveries.</td></tr>
+<tr><td><b>Block</b></td><td>0</td><td>Absorbs damage. Expires each turn unless <i>Inertia</i> is owned.</td></tr>
+<tr><td><b>Insight</b></td><td>2 at start</td><td>Spend 1 to eliminate one wrong answer per round (once per round). Also tradeable at the merchant.</td></tr>
+<tr><td><b>Supplies</b></td><td>0</td><td>Currency. Earned from bounties, shrines and caches; stolen by Drain mobs.</td></tr>
+<tr><td><b>Streak</b></td><td>0</td><td>Consecutive correct answers. ×2 grants +2 damage; ×3 grants +1 Energy. Broken by any wrong answer.</td></tr>
+<tr><td><b>Grudge</b></td><td>0</td><td>Hidden counter incremented on every wrong answer. Raises the merchant's markup.</td></tr>
+</table>
+
+<h2 id="battle-loop">The battle loop ${EDIT}</h2>
+<figure class="thumb"><img src="${A}cutscene-deeper-canopy.png" alt="The deeper canopy"><figcaption>The deeper canopy: everything below this line has more mass.</figcaption></figure>
+<p>Each battle round has two phases:</p>
+<ol class="wiki-list">
+<li><b>Card phase</b> — draw 5 cards, receive 3 Energy, play any number of cards onto the action queue. Cards are committed, not resolved.</li>
+<li><b>Question phase</b> — a physics question is presented as the round's skill check:
+  <ul class="wiki-list" style="margin-top:6px">
+  <li><b>Correct:</b> all committed cards resolve at full strength. Streak increases. Enemies then take their turns.</li>
+  <li><b>Incorrect:</b> committed cards fizzle to <b>one third</b> of their force. Streak resets. Grudge increments. Enemies then take their turns.</li>
+  </ul></li>
+</ol>
+<p>Status effects include <b>Weaken</b> (enemy deals less), <b>Damping</b> (all enemies deal less), <b>Shields</b> (absorb one instance of damage; multi-hit and sweep attacks shatter them), and <b>Resonating</b> (next card resolves twice).</p>
+
+<h2 id="questions">Questions &amp; difficulty levels ${EDIT}</h2>
+<p>The question bank uses scenario-first questions written in NCEA Level 3 examination style. Questions are tagged by topic and level, and draws avoid repeating questions already seen in the run:</p>
+<table class="wikitable">
+<tr><th>Level</th><th>Meaning</th><th>Where encountered</th></tr>
+<tr><td>Level 1</td><td>Interpret one principle in a concrete situation</td><td>Floors 1–2, most locations</td></tr>
+<tr><td>Level 2</td><td>Build a linked explanation from a principle</td><td>Everywhere from floor 3</td></tr>
+<tr><td>Level 3</td><td>Discuss, justify or compare multiple linked ideas</td><td>Floor 3+, always for Elites and Bosses</td></tr>
+</table>
+<p>Topics covered: momentum &amp; impulse, energy &amp; work, centre of mass, relative velocity, rotational motion, rolling, circular motion, orbital motion, and simple harmonic motion.</p>
+
+<h2 id="packs">Enemy packs &amp; map generation ${EDIT}</h2>
+<p>Packs are assembled from role archetypes that unlock richer mixes deeper down:</p>
+<ul class="wiki-list">
+  <li><b>Swarm token</b> — one species, three bodies</li>
+  <li><b>Soldier token</b> — a pair of midweights (twins or two species)</li>
+  <li><b>Heavy token</b> — one strong loner</li>
+</ul>
+<table class="wikitable">
+<tr><th>Floors</th><th>Possible compositions</th></tr>
+<tr><td>1–2</td><td>swarm / soldier / soldier+swarm</td></tr>
+<tr><td>3–4</td><td>+ heavy / heavy+swarm</td></tr>
+<tr><td>5+</td><td>+ heavy+soldier / soldier+soldier (max 4 units)</td></tr>
+</table>
+<p>The map generator enforces balance constraints: no back-to-back elite/rest/shop chains, no more than two consecutive pressure rooms (encounter/hazard/elite), guaranteed treasure at the midpoint floor, and a rest stop immediately before the boss. Rare strategic forks give some nodes two exits.</p>
+
+<h2 id="economy">Economy &amp; the grudge system ${EDIT}</h2>
+<figure class="thumb left"><img src="${A}location-merchant.png" alt="The Newtonian Trader"><figcaption>The Newtonian Trader. His prices remember your mistakes.</figcaption></figure>
+<p>The Newtonian Trader sells rations, tonics, rope, field notes and the once-per-run Warding Charm. His markup is <code>min(90%, 15% × grudge)</code> — every wrong answer anywhere makes everything 15% more expensive. Trading one Insight yields 20 Supplies. The community regards the grudge system as "the only merchant in gaming who takes bad physics personally."<sup class="cn">[citation needed]</sup></p>
+
+<h2 id="save">Saving ${EDIT}</h2>
+<p>Three save slots persist runs, maps, decks, upgrades, artifacts and discoveries in localStorage, including mid-battle state. Older saves are automatically migrated forward when new fields ship.</p>
+
+${RELATED([['Cards','Cards','#/cards'],['Enemies','Bestiary','#/bestiary'],['Guides','Strategy guide','#/strategy']])}
+
+<div class="cat-links"><b>Categories:</b> <a class="cat-pill" href="#">Game mechanics</a><a class="cat-pill" href="#">Systems</a></div>
+${COMMENT_BLOCK('mechanics')}
+<div class="comments-note">💬 Last edited 5 days ago by <a href="#">GrudgeWatcher</a> · Page views today: 864</div>
+`,
+
+/* ---------------- LOCATIONS ---------------- */
+locations: `
+<div class="breadcrumb"><a href="#/main">Wiki Home</a> › World › Locations</div>
+<h1 class="article-title">Locations</h1>
+<div class="title-under">Landmarks of the Mechanics journey. For the realm itself, see <a href="#/main">the main article</a>. ${EDIT}</div>
+<p>Each run's map places landmarks weighted by rarity. Hazard stories are drawn at map-generation time and persist with the node across save/resume.</p>
+
+<table class="wikitable">
+<tr><th>Icon</th><th>Landmark</th><th>Weight</th><th>Type</th><th>Notable encounters</th></tr>
+<tr><td>♣</td><td>Jungle encounter</td><td>34%</td><td>Combat</td><td>Vector Baboon ambushes</td></tr>
+<tr><td>ϟ</td><td>Dangerous ground</td><td>15%</td><td>Hazard</td><td>Impulse Rapids · Rotted Tension Bridge · Quicksand Sink · Hornet Swarm · Scree Slide</td></tr>
+<tr><td>?</td><td>Unknown landmark</td><td>14%</td><td>Mystery</td><td>Shrine of Significant Figures</td></tr>
+<tr><td>♨</td><td>Counterforce camp</td><td>12%</td><td>Safe</td><td>Rest (+15 Stability) or study (+1 Insight)</td></tr>
+<tr><td>⚖</td><td>Newtonian trader</td><td>7%</td><td>Shop</td><td>Dynamic pricing via grudge</td></tr>
+<tr><td>◆</td><td>Buried cache</td><td>6%</td><td>Treasure</td><td>The Kinetic Cache (40 Supplies)</td></tr>
+<tr><td>⌬</td><td>Ancient mechanism</td><td>7%</td><td>Puzzle</td><td>The Conservation Ruins — 3-stage gear puzzle</td></tr>
+<tr><td>♜</td><td>Elite creature</td><td>5%</td><td>Elite combat</td><td>Momentum Rhino (from floor ~55%)</td></tr>
+</table>
+
+<h2>Location gallery ${EDIT}</h2>
+<div class="img-gallery">
+  <figure><img src="${A}location-hazard.png" alt="Dangerous ground"><figcaption>Dangerous ground — five documented hazards</figcaption></figure>
+  <figure><img src="${A}location-mystery.png" alt="Unknown landmark"><figcaption>Unknown landmark — shrines grade on significant figures</figcaption></figure>
+  <figure><img src="${A}location-rest.png" alt="Counterforce camp"><figcaption>Counterforce camp — equilibrium, briefly</figcaption></figure>
+  <figure><img src="${A}location-merchant.png" alt="Newtonian trader"><figcaption>The Newtonian Trader's stall</figcaption></figure>
+  <figure><img src="${A}location-treasure.png" alt="Buried cache"><figcaption>Buried cache — stored energy awaiting release</figcaption></figure>
+  <figure><img src="${A}location-ruins.png" alt="Ancient mechanism"><figcaption>The Conservation Ruins</figcaption></figure>
+</div>
+
+<h2>Named hazards ${EDIT}</h2>
+<table class="wikitable">
+<tr><th>Hazard</th><th>Concept tested</th><th>Failure penalty</th></tr>
+<tr><td>The Impulse Rapids</td><td>Impulse = force × time</td><td>−11 Stability</td></tr>
+<tr><td>The Rotted Tension Bridge</td><td>Tension forces</td><td>−10 Stability</td></tr>
+<tr><td>The Quicksand Sink</td><td>Pressure = force ÷ area</td><td>−13 Stability</td></tr>
+<tr><td>The Hornet Swarm</td><td>p = mv for a 0.002 kg hornet</td><td>−12 Stability</td></tr>
+<tr><td>The Scree Slide</td><td>Static friction on slopes</td><td>−11 Stability</td></tr>
+<tr><td>Vines of Variable Tension</td><td>Energy stores</td><td>−12 Stability</td></tr>
+</table>
+
+<h2>The Conservation Ruins ${EDIT}</h2>
+<figure class="thumb"><img src="${A}cutscene-mist-trail.png" alt="The mist trail"><figcaption>The trail beyond the ruins, where the canopy closes "like a textbook shutting."</figcaption></figure>
+<p>A three-stage mechanism puzzle: set the counterweight (moments), transfer the motion (gear meshing), release the sphere (impulse). Mistakes cost 5 Stability per stage; a flawless solve grants bonus Insight. Jamnani notes that "every fallen ring was once somebody's miscalculation."</p>
+
+<h2>Shrine outcomes ${EDIT}</h2>
+<p>The Shrine of Significant Figures gambles on rounding precision. Documented outcomes range from +2 Insight ("the numerals briefly arrange themselves into a smug tick"), an overflow jackpot of Insight plus Supplies that "nobody knows why. Do not ask.", to an aggressively educational shock costing 4 Stability but granting 1 Insight "on the way out. Small mercies."</p>
+
+${RELATED([['Enemies','Bestiary','#/bestiary'],['Characters','Mr Jamnani','#/jamnani'],['Systems','Game mechanics','#/mechanics']])}
+
+<div class="cat-links"><b>Categories:</b> <a class="cat-pill" href="#">Locations</a><a class="cat-pill" href="#">World building</a></div>
+${COMMENT_BLOCK('locations')}
+<div class="comments-note">💬 Last edited last week by <a href="#">QuicksandSurvivor</a> · Page views today: 643</div>
+`,
+
+/* ---------------- JAMNANI ---------------- */
+jamnani: `
+<div class="breadcrumb"><a href="#/main">Wiki Home</a> › Characters › Mr Jamnani</div>
+<h1 class="article-title">Mr Jamnani</h1>
+<div class="title-under">${EDIT}</div>
+<aside class="infobox">
+  <div class="ib-title">Mr Jamnani</div>
+  <div class="ib-image"><img src="${A}jamnani-neutral-cutout.png" alt="Mr Jamnani, neutral pose" style="aspect-ratio:1/1;object-fit:contain;object-position:top;padding:8px;width:calc(100% - 16px)"></div>
+  <table>
+    <tr><th>Alias(es)</th><td>The Guide · "Sir"</td></tr>
+    <tr><th>Role</th><td>Narrator, mentor, examiner</td></tr>
+    <tr><th>Status</th><td>Physically absent, emotionally present</td></tr>
+    <tr><th>Poses</th><td>Neutral · Explaining · Warning · Disappointed</td></tr>
+    <tr><th>Signature units</th><td>Disappointment (AoE)</td></tr>
+  </table>
+  <div class="ib-caption">"Show your working."</div>
+</aside>
+
+<p><b>Mr Jamnani</b> is the disembodied mentor of <i>Jamnanji: The Hidden Joule</i>. He narrates the prologue from a classroom that may no longer exist, guides the explorer across all three acts via radio-adjacent commentary, and observes every failure with what players describe as "statistically significant disappointment."</p>
+
+<h2>Personality ${EDIT}</h2>
+<p>Jamnani speaks almost entirely in physics metaphors applied to personal conduct. He grades hazards, shrines and the player's life choices on significant figures. His four documented emotional poses — neutral, explaining, warning, and disappointed — have been catalogued extensively by the community, with "disappointed" appearing roughly twice as often as any other pose.<sup class="cn">[citation needed]</sup></p>
+
+<h2>Pose gallery ${EDIT}</h2>
+<div class="img-gallery pose-row">
+  <figure><img src="${A}jamnani-explaining-cutout.png" alt="Explaining pose"><figcaption>Explaining — his default lecture stance</figcaption></figure>
+  <figure><img src="${A}jamnani-warning-cutout.png" alt="Warning pose"><figcaption>Warning — proceed with correct units</figcaption></figure>
+  <figure><img src="${A}jamnani-neutral-cutout.png" alt="Neutral pose"><figcaption>Neutral — statistically suspicious calm</figcaption></figure>
+  <figure><img src="${A}jamnani-disappointed-cutout.png" alt="Disappointed pose"><figcaption>Disappointed — you know what you did</figcaption></figure>
+</div>
+
+<h2>The Explorer ${EDIT}</h2>
+<div class="img-gallery pose-row">
+  <figure><img src="${A}student-neutral-v3-cutout.png" alt="Explorer, neutral"><figcaption>The Explorer — neutral</figcaption></figure>
+  <figure><img src="${A}student-startled-v3-cutout.png" alt="Explorer, startled"><figcaption>Startled — a common state</figcaption></figure>
+  <figure><img src="${A}student-overwhelmed-v3-cutout.png" alt="Explorer, overwhelmed"><figcaption>Overwhelmed — also common</figcaption></figure>
+  <figure><img src="${A}student-determined-v3-cutout.png" alt="Explorer, determined"><figcaption>Determined — battle portrait</figcaption></figure>
+</div>
+
+<h2>Notable quotes ${EDIT}</h2>
+<ul class="wiki-list">
+  <li>"Remember: show your working, check your units, and never assume the monkeys are frictionless."</li>
+  <li>"Rest is not weakness. It is conservation of energy, applied personally."</li>
+  <li>"His prices are elastic. Your patience should not be." (re: the Newtonian Trader)</li>
+  <li>"Statistically, this is the part of the expedition where dignity becomes optional."</li>
+  <li>"Electricity grades harder than I do." (teasing the Storm Circuit)</li>
+  <li>"Then you return wiser. Possibly flatter, but wiser."</li>
+</ul>
+
+<h2>Theories ${EDIT}</h2>
+<p>Prominent fan theories hold that Jamnani is either (a) the original discoverer of the Hidden Joules, (b) the person who took them, or (c) simply a teacher whose marking load has granted him jurisdiction over a pocket dimension. None are confirmed. When asked directly why he won't accompany the player physically, he answers: "Physically? No. But I will be observing, advising, and expressing disappointment whenever necessary."</p>
+
+${RELATED([['World','Locations','#/locations'],['Lore','Community feed','#/community'],['Game','Main page','#/main']])}
+
+<div class="cat-links"><b>Categories:</b> <a class="cat-pill" href="#">Characters</a><a class="cat-pill" href="#">Narrators</a></div>
+${COMMENT_BLOCK('jamnani')}
+<div class="comments-note">💬 Last edited 4 hours ago by <a href="#">JamnaniQuoteBot</a> · Page views today: 2,451</div>
+`,
+
+/* ---------------- STRATEGY ---------------- */
+strategy: `
+<div class="breadcrumb"><a href="#/main">Wiki Home</a> › Guides › Strategy guide</div>
+<h1 class="article-title">Strategy guide</h1>
+<div class="title-under">Community-tested tactics for all three acts. ${EDIT}</div>
+<figure class="thumb"><img src="${A}cutscene-rhino-clearing.png" alt="The rhino clearing"><figcaption>"You cannot outrun six metres per second. You can, however, out-think it."</figcaption></figure>
+<div class="toc"><b>Contents</b><ol>
+<li><a href="#general">General principles</a></li>
+<li><a href="#deck">Deck building</a></li>
+<li><a href="#act1">Act I tactics</a></li>
+<li><a href="#act2">Act II tactics</a></li>
+<li><a href="#act3">Act III tactics</a></li>
+<li><a href="#bosses">Boss strategies</a></li>
+</ol></div>
+
+<h2 id="general">General principles ${EDIT}</h2>
+<ul class="wiki-list">
+  <li><b>The question IS your attack roll.</b> Playing five cards means nothing if the answer fizzles them to ⅓. When unsure, spend 1 Insight to strike a wrong answer — a guaranteed full-strength turn usually outvalues the Insight.</li>
+  <li><b>Protect the streak.</b> Streak ×2 adds +2 damage to effects and ×3 adds +1 Energy. Guessing on a level-3 question with a hot streak is how runs end.</li>
+  <li><b>Watch the grudge meter.</b> Wrong answers compound into shop prices. Buy your Warding Charm BEFORE you start failing questions, not after.</li>
+  <li><b>Kill Drains first.</b> Pulley Spiders and Angular Beavers steal Supplies — your entire late-run upgrade budget lives in those mobs.</li>
+  <li><b>Read the intents.</b> Damage is telegraphed exactly. Bank Block the turn before any ⚔ 13 or higher.</li>
+</ul>
+
+<h2 id="deck">Deck building ${EDIT}</h2>
+<table class="wikitable">
+<tr><th>Archetype</th><th>Core cards</th><th>Plan</th></tr>
+<tr><td><b>Fortress (Block engine)</b></td><td>Inertia + Mass Distribution + Stable System + Calibrated Compass artifact</td><td>Inertia makes Block permanent; stack it beyond anything the cycle patterns can output. Nearly immune to Charge bursts.</td></tr>
+<tr><td><b>Momentum mirror</b></td><td>Newton's Third Law + Vector Sum + Impulse Transfer</td><td>Take a controlled hit, then reflect it. Third Law+ deals lastTaken + 3 — scales beautifully against heavies.</td></tr>
+<tr><td><b>Multi-hit shield-breaker</b></td><td>Downhill Race + Angular Acceleration + Low Orbit + Impulse Sweep</td><td>Guard-type turtles and shield phases evaporate; each hit strips a shield instance.</td></tr>
+<tr><td><b>Execute tempo</b></td><td>Escape Velocity + Closing Speed + Kinetic Strike</td><td>Escape Velocity doubles below half HP — pair with high single-target burst to delete elites before their third cycle beat.</td></tr>
+</table>
+
+<h2 id="act1">Act I tactics ${EDIT}</h2>
+<figure class="thumb left"><img src="${A}battle-act-1.png" alt="Act I battlefield"><figcaption>The Canopy arena. Respect the Parrot's second beat.</figcaption></figure>
+<ul class="wiki-list">
+  <li>The <b>Elastic Viper</b> looks harmless at 2 damage. It is not harmless on turn four. Weaken it early (Friction) or remove it.</li>
+  <li><b>Inertia Sloth:</b> its ⋯ charge telegraph gives two free setup turns. Full Block, then burst while it's winding up again.</li>
+  <li><b>Scalar Parrots</b> alternate 2/6 — brace on even beats, swing on odd ones.</li>
+  <li>Spend floor 1–2 learning the level-1/2 question pool; the streak bonus carries you until level-3 questions open up.</li>
+</ul>
+
+<h2 id="act2">Act II tactics ${EDIT}</h2>
+<ul class="wiki-list">
+  <li><b>Torque Turtles</b> guard every other turn. Torque doubles into shields; multi-hits strip them. Both work — raw single hits waste half your turns.</li>
+  <li><b>Rolling Boulders</b> burst for 13. Two windup turns = 26 potential Block banked, or kill it first.</li>
+  <li><b>Flywheel Lemurs</b> ramp +3 per connect. They must die within ~2 connections or be permanently Weakened.</li>
+</ul>
+
+<h2 id="act3">Act III tactics ${EDIT}</h2>
+<figure class="thumb"><img src="${A}battle-act-3.png" alt="Act III battlefield"><figcaption>The summit arena. Bring Insight.</figcaption></figure>
+<ul class="wiki-list">
+  <li><b>Mosquito Swarms</b> (×5 bodies) are the premier argument for keeping Impulse Sweep in your deck forever.</li>
+  <li><b>Harmonic Apes</b> cycle 3/9 — the 3 is bait, the 9 is the point. Treat every Ape like a mini-Sloth.</li>
+  <li><b>Resonant Howlers</b> punish long fights. Open with your biggest turn; don't let them establish amplitude.</li>
+</ul>
+
+<h2 id="bosses">Boss strategies ${EDIT}</h2>
+<figure class="thumb"><img src="${A}cutscene-temple-doors.png" alt="Temple doors"><figcaption>The causeway. Everything you have learned converges here. Some of it literally.</figcaption></figure>
+<table class="wikitable">
+<tr><th>Boss</th><th>Cycle</th><th>Key tactic</th></tr>
+<tr><td>The Unstoppable Object</td><td>6 / 6 / <b>13</b></td><td>8 HP means ~2 good turns. Bank Block for the 13, dump everything else. Its final question (rate of change of momentum = resultant force) is a freebie if you've been paying attention.</td></tr>
+<tr><td>The Angular Colossus</td><td>6 / 6 / <b>13</b></td><td>Same discipline, harder questions (level 3 rotation). Flywheel Reserve for economy turns.</td></tr>
+<tr><td>The Resonant Heart</td><td>6 / 6 / <b>13</b></td><td>The SHM/resonance questions are the hardest in the game. Arrive with ≥2 Insight banked purely for answer elimination.</td></tr>
+</table>
+<blockquote class="quote">Pro tip from the talk pages: “Answer well. Answer quickly. And if it helps, imagine it marking your coursework.” — Jamnani was not joking.</blockquote>
+
+${RELATED([['Combat','Bestiary','#/bestiary'],['Cards','Cards','#/cards'],['Rules','Game mechanics','#/mechanics']])}
+
+<div class="cat-links"><b>Categories:</b> <a class="cat-pill" href="#">Guides</a><a class="cat-pill" href="#">Strategy</a><a class="cat-pill" href="#">Community content</a></div>
+${COMMENT_BLOCK('strategy')}
+<div class="comments-note">💬 Last edited 6 hours ago by <a href="#">TorqueTurtleHater</a> · Page views today: 4,017</div>
+`,
+
+/* ---------------- COMMUNITY ---------------- */
+community: COMMUNITY_PAGE,
+thread: THREAD_PAGE
+};
+
+function route() {
+  const hash = location.hash || '#/main';
+  const key = hash.replace('#/', '');
+  document.querySelectorAll('.header-tabs a').forEach(a => {
+    const isCommTab = key === 'community' || key === 'thread';
+    a.classList.toggle('active', isCommTab ? a.textContent === 'Community' : a.textContent === 'Articles');
+  });
+  const root = document.getElementById('article-root');
+  root.innerHTML = (ARTICLES[key] || ARTICLES.main).replaceAll('.png', '.webp');
+  root.querySelectorAll('img').forEach((image, index) => {
+    image.decoding = 'async';
+    if (index === 0) image.fetchPriority = 'high';
+    else image.loading = 'lazy';
+  });
+  window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', route);
+route();
+</script>
+</body>
+</html>
