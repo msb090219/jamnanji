@@ -491,7 +491,6 @@ body{position:fixed;inset:0}
 @media(max-width:1100px) and (min-width:781px){
   .hand-dock{width:min(700px,calc(100vw - 360px))}
   .hand-row .card-tile{width:120px;min-height:142px;margin-inline:-10px}
-  .battle-discard-pile{right:12px}
   .battle-next-row{bottom:186px;max-width:calc(100vw - 40px)}
 }
 
@@ -914,7 +913,7 @@ body{position:fixed;inset:0}
 .answer-btn{max-width:74ch}
 
 /* --- Theory options across a wider, centred question card --- */
-.location-action-panel{left:50%;translate:-50% 0;width:min(1080px,calc(100vw - 84px))}
+.location-action-panel{left:0;right:0;margin-inline:auto;width:min(1080px,calc(100vw - 84px))}
 .location-rest .location-action-panel,.location-merchant .location-action-panel{translate:none}
 .location-action-panel .answers{grid-template-columns:repeat(3,1fr);gap:9px}
 .location-action-panel .answer-btn{display:grid;place-items:center;min-height:0;max-width:none;padding:11px 12px;text-align:center;font:700 .78rem/1.38 Georgia,serif}
@@ -947,7 +946,7 @@ body{position:fixed;inset:0}
 .fighter-action-preview b{position:relative;z-index:2;margin:0;color:#fff;font:800 .67rem/1 Arial,sans-serif;text-shadow:0 1px 3px #000}
 .fighter-action-preview .preview-shield{display:none}.fighter-action-preview .preview-attack{display:none}
 .fighter-action-preview.is-block .preview-shield{display:block}.fighter-action-preview.is-attack .preview-attack{display:block}
-.fighter-action-preview .preview-shield path{fill:#3f6074;stroke:#b7d0d5;stroke-width:1.4}
+.fighter-action-preview .preview-shield path{fill:#5a9a6d;stroke:#c9f3dc;stroke-width:1.4}
 .sword-icon{width:.68em;height:auto;vertical-align:-2px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.55))}
 .fighter-readout:has(.fighter-action-preview.hidden)>b{margin-left:0}
 .fighter-health{
@@ -991,8 +990,8 @@ body{position:fixed;inset:0}
   position:absolute;z-index:4;left:-9px;top:50%;transform:translateY(-50%);
   width:31px;height:31px;margin:0;border-radius:50%;
   display:grid;place-items:center;grid-auto-flow:column;gap:1px;
-  color:#d7ebf7;background:linear-gradient(180deg,#233846,#152430);
-  border:2px solid #6f9cbc;
+  color:#eef4e4;background:linear-gradient(180deg,#3f6a4e,#22392b);
+  border:2px solid #8fae7e;
   font:800 .78rem/1 Arial,sans-serif;text-shadow:0 1px 2px #000;
   box-shadow:0 3px 7px rgba(0,0,0,.65),inset 0 1px rgba(255,255,255,.18);
   transition:border-color .25s,box-shadow .25s,color .25s;
@@ -1259,7 +1258,7 @@ body{position:fixed;inset:0}
 
 /* Battle panels are centred against the viewport; Commit is mounted outside this animated panel. */
 .location-encounter .location-action-panel,.location-elite .location-action-panel,.location-joule .location-action-panel{
-  left:50%;right:auto;margin-inline:0;translate:-50% 0;transform:none;
+  left:0;right:0;margin-inline:auto;translate:none;transform:none;
   width:min(1080px,calc(100vw - 84px));max-width:calc(100vw - 84px);
 }
 .cutscene-screen .journey-embark{z-index:12}
@@ -1500,14 +1499,17 @@ body{position:fixed;inset:0}
   clip-path:polygon(3% 5%,97% 0,100% 88%,94% 100%,4% 96%,0 14%);
   white-space:nowrap;
   color:#f3efe2;
+  font-family:inherit;
 }
 .battle-resource-dock .energy-orb{
   background:#67562f;
 }
 .battle-resource-dock .pile-chip{
   background:#34453f;
+  cursor:pointer;
+  transition:filter .14s ease,translate .14s ease;
 }
-.battle-resource-dock .pile-chip:nth-child(3){background:#293832}
+.battle-resource-dock .pile-chip:hover,.battle-resource-dock .pile-chip:focus-visible{filter:brightness(1.2);translate:0 -3px;outline:1px solid #d7ad58;outline-offset:2px}
 .battle-resource-dock .energy-orb i,
 .battle-resource-dock .pile-chip i{font-style:normal;font-size:1rem;line-height:1}
 .battle-resource-dock .energy-orb b,
@@ -1555,15 +1557,22 @@ body{position:fixed;inset:0}
 .enemy-phase-report span{color:#d8d6cb;font-size:.72rem}
 .enemy-phase-report span+span::before{content:"◆";margin-right:9px;color:#9b674e;font-size:.45rem;vertical-align:middle}
 #battle-next{z-index:1500}
-/* Discard pile: cards sweep into this icon at the end of the turn. */
-.battle-discard-pile{position:fixed;z-index:1300;right:18px;bottom:calc(clamp(18px,7vh,64px) + 62px);display:grid;grid-template-columns:auto auto;gap:1px 7px;align-items:center;justify-items:start;padding:8px 12px;color:#d7ddd6;background:rgba(25,34,32,.95);border:1px solid #5e6963;box-shadow:0 5px 12px #0008;pointer-events:none}
-.battle-discard-pile i{grid-row:1/3;font-size:1.05rem;font-style:normal;opacity:.85}
-.battle-discard-pile b{font:800 .78rem Arial,sans-serif}
-.battle-discard-pile small{grid-column:2;color:#8e9992;font:700 .46rem Arial,sans-serif;text-transform:uppercase;letter-spacing:.08em}
+.battle-discard-pile{position:fixed;z-index:1300;right:18px;bottom:calc(clamp(18px,7vh,64px) + 66px);min-width:123px;min-height:50px;display:flex;align-items:center;justify-content:center;gap:7px;padding:10px 16px;border:0;border-radius:0;color:#f3efe2;background:#293832;box-shadow:none;clip-path:polygon(3% 5%,97% 0,100% 88%,94% 100%,4% 96%,0 14%);font-family:inherit;white-space:nowrap;cursor:pointer;transition:filter .14s ease,translate .14s ease}
+.battle-discard-pile i{font-style:normal;font-size:1rem;line-height:1}.battle-discard-pile b{font:800 1rem/1 Arial,sans-serif}.battle-discard-pile small{color:inherit;font:700 .62rem/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.08em}
+.battle-discard-pile:hover,.battle-discard-pile:focus-visible{filter:brightness(1.2);translate:0 -3px;outline:1px solid #d7ad58;outline-offset:2px}
 .battle-discard-pile.is-receiving{animation:discard-pulse .3s ease}
-@keyframes discard-pulse{40%{border-color:#d7ad58;box-shadow:0 0 14px rgba(215,173,88,.5)}}
+@keyframes discard-pulse{40%{filter:brightness(1.5) drop-shadow(0 0 12px rgba(215,173,88,.55))}}
 .card-discard-ghost{position:fixed!important;z-index:5000!important;width:140px!important;min-height:164px!important;margin:0!important;pointer-events:none!important;opacity:.95!important;transition:transform .36s cubic-bezier(.5,.06,.6,1),opacity .36s ease!important;filter:drop-shadow(0 10px 10px #000b)!important}
 .card-discard-ghost.is-flying{transform:translate(var(--play-x),var(--play-y)) scale(.24) rotate(16deg)!important;opacity:.1!important}
+.battle-pile-overlay{position:fixed;z-index:5200;inset:0;display:grid;place-items:center;padding:34px}
+.battle-pile-backdrop{position:absolute;inset:0;border:0;background:rgba(3,7,6,.78);backdrop-filter:blur(6px) brightness(.55)}
+.battle-pile-modal{position:relative;width:min(980px,calc(100vw - 80px));max-height:calc(100vh - 68px);display:grid;grid-template-rows:auto minmax(0,1fr);padding:25px 30px 28px;color:#ece5d2;background:linear-gradient(155deg,rgba(49,61,56,.99),rgba(17,24,22,.99) 74%);border:1px solid #81734e;border-top:4px solid #b8994e;box-shadow:inset 0 0 36px #0007,0 25px 75px #000d;clip-path:polygon(17px 0,calc(100% - 12px) 0,100% 13px,100% calc(100% - 18px),calc(100% - 19px) 100%,13px 100%,0 calc(100% - 12px),0 16px)}
+.battle-pile-modal header{display:flex;justify-content:space-between;gap:22px;padding:0 3px 17px;border-bottom:1px dashed rgba(192,166,99,.36)}
+.battle-pile-modal header small{color:#c5a75b;font:800 .58rem Arial,sans-serif;letter-spacing:.17em;text-transform:uppercase}.battle-pile-modal h2{margin:3px 0 0;color:#f0e2bc;font:800 2.25rem/1 var(--scribble)}.battle-pile-modal header p{margin:7px 0 0;color:#9fa9a2;font:.68rem Arial,sans-serif}
+.battle-pile-close{align-self:start;width:35px;height:35px;border:1px solid #746b50;color:#d8d2bf;background:#28332f;font:700 1.35rem/1 Arial,sans-serif}.battle-pile-close:hover,.battle-pile-close:focus-visible{color:#fff;border-color:#d7ad58;outline:1px solid #d7ad58;outline-offset:2px}
+.battle-pile-grid{display:grid;grid-template-columns:repeat(auto-fill,140px);justify-content:center;align-content:start;gap:17px;min-height:190px;overflow:auto;padding:22px 12px 8px;scrollbar-width:thin;scrollbar-color:#7b6541 #1b2522}
+.battle-pile-grid .card-tile{width:140px;min-height:164px;cursor:default;opacity:1;filter:none}.battle-pile-grid .card-tile:hover{transform:none}
+.battle-pile-empty{grid-column:1/-1;align-self:center;margin:auto;color:#9ca59e;font:700 1rem var(--scribble);text-align:center}
 @keyframes enemy-lunge{0%,100%{transform:translateX(0) scale(1)}18%{transform:translateX(12px) scale(.98)}52%{transform:translateX(clamp(-380px,-28vw,-170px)) scale(1.08)}68%{transform:translateX(clamp(-350px,-25vw,-150px)) scale(1.04)}}
 @keyframes enemy-brace{0%,100%{transform:scale(1)}35%{transform:scale(.9) translateY(7px)}62%{transform:scale(1.04) translateY(-3px)}}
 @keyframes shield-rise{0%{opacity:0;transform:scale(.55)}45%{opacity:1;transform:scale(1.08)}100%{opacity:.9;transform:scale(1)}}
@@ -1587,3 +1596,409 @@ body{position:fixed;inset:0}
 /* Notebook and settings hover as icons, without a surrounding tile. */
 .hud .hud-icon:hover{border-color:transparent;background:transparent;box-shadow:none;outline:0;transform:none}
 .hud .hud-icon:hover .hud-art-icon{filter:drop-shadow(0 3px 3px #111b18) brightness(1.2);transform:scale(1.15)}
+
+/* Dock family: one layer, above every overlay, below the toast */
+#continue.viewport-continue,.battle-next,.commit-btn,#again,#reward-continue,.journey-embark{z-index:1600}
+.cutscene-screen .journey-embark{bottom:clamp(18px,7vh,64px)}
+
+/* ===== Battle vitals: one stamped-tag language, red=attack green=block gold=special ===== */
+/* Enemy intent tags */
+.enemy-unit .intent-pip{
+  min-width:52px;padding:5px 9px;gap:5px;border-radius:8px;
+  border:2px solid #8c7549;
+  background:linear-gradient(180deg,rgba(38,32,22,.96),rgba(16,20,16,.97));
+  box-shadow:0 4px 11px #000a,inset 0 1px rgba(255,236,200,.14),inset 0 0 0 1px rgba(0,0,0,.55);
+  font:800 .78rem/1 var(--scribble);letter-spacing:.02em;color:#f0e3c2;
+}
+.intent-pip .sword-icon{width:13px;height:15px}
+.intent-pip .shield-icon{width:14px;height:16px}
+.intent-pip b{font:inherit;color:inherit}
+.intent-pip.is-attack,.intent-pip.is-drain{border-color:#a05446;background:linear-gradient(180deg,rgba(64,31,27,.96),rgba(28,15,13,.97))}
+.intent-pip.is-charge{border-color:#b08f45;color:#f2d98c;background:linear-gradient(180deg,rgba(56,44,20,.96),rgba(26,21,10,.97))}
+.intent-pip.is-guard{border-color:#5f8f74;color:#c9f3dc;background:linear-gradient(180deg,rgba(26,46,34,.96),rgba(13,23,17,.97))}
+.intent-pip.is-guard .shield-icon{width:16px;height:18px}
+
+/* Player block seal: green shield tag overlapping the bar's left edge */
+.hp-wrap .block-badge{
+  left:-13px;top:50%;transform:translateY(-50%);
+  width:auto;height:34px;padding:0 10px 0 7px;border-radius:17px;
+  display:inline-flex;align-items:center;gap:5px;
+  color:#eef4e4;background:linear-gradient(180deg,#3f6a4e,#22392b);
+  border:2px solid #8fae7e;
+  font:800 .82rem/1 var(--scribble);
+  box-shadow:0 3px 8px rgba(0,0,0,.65),inset 0 1px rgba(255,255,255,.16);
+}
+.hp-wrap .block-badge .shield-icon{width:15px;height:17px}
+.hp-wrap .block-badge b{font:inherit;color:inherit}
+.hp-wrap .block-badge.is-retained{border-color:#c9a653;color:#f2dc9b;background:linear-gradient(180deg,#4a5a35,#2a3018);box-shadow:0 0 13px rgba(201,166,83,.5),0 3px 8px rgba(0,0,0,.65)}
+/* Enemy shield: compact circular green seal, icon only */
+.hp-wrap .enemy-shield-badge{width:30px;height:30px;padding:0;border-radius:50%;justify-content:center;background:linear-gradient(180deg,#3f6a4e,#22392b);border:2px solid #8fae7e}
+.hp-wrap .enemy-shield-badge .shield-icon{width:14px;height:16px}
+
+/* Action preview: the same stamped tag, mirroring the enemy intent */
+.fighter-action-preview{width:auto;height:30px;min-width:46px;padding:0 9px 0 7px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;gap:5px;border:2px solid #8c7549;background:linear-gradient(180deg,rgba(38,32,22,.96),rgba(16,20,16,.97));box-shadow:0 3px 9px #000a,inset 0 1px rgba(255,236,200,.12)}
+.fighter-action-preview svg{position:static;width:13px;height:15px}
+.fighter-action-preview b{position:static;margin:0;font:800 .78rem/1 var(--scribble);color:#f0e3c2;text-shadow:0 1px 2px #000}
+.fighter-action-preview.is-block{border-color:#5f8f74;background:linear-gradient(180deg,rgba(26,46,34,.96),rgba(13,23,17,.97));color:#c9f3dc}
+.fighter-action-preview.is-attack{border-color:#a05446;background:linear-gradient(180deg,rgba(64,31,27,.96),rgba(28,15,13,.97))}
+.fighter-action-preview .preview-shield path{fill:#5a9a6d;stroke:#c9f3dc;stroke-width:1.2}
+
+/* One bar anatomy, both sides: 16px track, red gradient fill, number inside */
+.fighter-health{height:16px}
+.enemy-health{position:relative}
+.enemy-unit .enemy-health small{position:absolute;inset:0;display:grid;place-items:center;margin:0;padding:0;background:transparent;border:0;color:#fff;font:800 .64rem/1 Arial,sans-serif;text-shadow:0 1px 3px #000,0 0 4px #000;pointer-events:none}
+
+/* Damage floaties share the expedition hand */
+.damage-float{font:800 1.3rem var(--scribble)}
+
+/* ===== Vitals refinement: compact badges, one numeric language, no floaters ===== */
+/* Numbers are data: Arial 800 everywhere. Kalam stays for names and words only. */
+.intent-pip b,.block-badge b,.fighter-action-preview b,.incoming-tag b{font:800 .72rem/1 Arial,sans-serif;letter-spacing:.02em}
+
+/* Intent badges: tight, legible, tied to their enemy with a stem */
+.enemy-unit .intent-pip{
+  min-width:44px;padding:4px 8px;gap:4px;border-radius:7px;
+  border-width:2px;font-size:.72rem;
+  box-shadow:0 3px 8px #000a,inset 0 1px rgba(255,236,200,.14);
+}
+.intent-pip .sword-icon{width:12px;height:15px;filter:drop-shadow(0 0 3px rgba(255,150,120,.55))}
+.intent-pip .shield-icon{filter:drop-shadow(0 0 3px rgba(140,220,170,.45))}
+.intent-pip .pip-glyph{font-size:.95em;text-shadow:0 0 4px rgba(242,217,140,.5)}
+.intent-pip .loot-mark{font-size:.85em;color:#f2d98c;text-shadow:0 0 4px rgba(242,217,140,.6)}
+.intent-pip::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);border:5px solid transparent;border-top-color:rgba(16,20,16,.97);filter:drop-shadow(0 1px 1px #0009)}
+.intent-pip.is-attack::after,.intent-pip.is-drain::after{border-top-color:rgba(28,15,13,.97)}
+.intent-pip.is-guard::after{border-top-color:rgba(13,23,17,.97)}
+.intent-pip.is-charge::after{border-top-color:rgba(26,21,10,.97)}
+
+/* Nameplates join the expedition hand: Kalam, capped to the bar column */
+.enemy-unit b{
+  display:block;max-width:176px;margin:8px auto 0;padding:3px 10px 4px;
+  overflow:hidden;text-overflow:ellipsis;
+  font:700 .74rem/1.2 var(--scribble);letter-spacing:.03em;text-transform:none;
+}
+
+/* Block seal reads as ONE unit: green pill, shield + Arial number */
+.hp-wrap .block-badge{height:30px;padding:0 9px 0 6px;border-radius:15px;gap:4px}
+.hp-wrap .block-badge .shield-icon{width:13px;height:15px}
+.hp-wrap .block-badge b{color:#f0f7e8;text-shadow:0 1px 2px #000}
+.hp-wrap .enemy-shield-badge{width:26px;height:26px;border-radius:50%}
+
+/* Incoming damage: a framed chip below the bar, not loose floating text */
+.incoming-tag{
+  position:absolute;right:0;bottom:-19px;top:auto;
+  padding:2px 7px 2px 5px;border-radius:6px;
+  border:1px solid #a05446;background:linear-gradient(180deg,rgba(64,31,27,.92),rgba(28,15,13,.94));
+  box-shadow:0 2px 6px #000a;color:#ffd9cf;font-size:.58rem;text-shadow:0 1px 2px #000;
+}
+.incoming-tag .sword-icon{width:10px;filter:drop-shadow(0 0 2px rgba(255,150,120,.5))}
+
+/* Action preview: same compact anatomy */
+.fighter-action-preview{height:28px;min-width:42px;padding:0 8px 0 6px;border-radius:7px;gap:4px}
+.fighter-action-preview svg{width:12px;height:15px}
+
+/* Bars get breathing room from the screen edge */
+.enemy-pack{padding-bottom:14px}
+
+/* ===== Contrast pass: every number legible at glance ===== */
+.intent-pip b{font-size:.78rem;color:#ffe9c9;text-shadow:0 1px 2px #000}
+.intent-pip::after{border-width:6px}
+.intent-pip.is-charge b{color:#ffe9a7}
+.intent-pip.is-guard b{color:#d9f5e4}
+.enemy-unit .enemy-health small,.fighter-health small{font-size:.68rem;color:#fff;text-shadow:0 1px 3px #000,0 0 5px rgba(0,0,0,.9)}
+.incoming-tag{padding:3px 8px 3px 6px;border-width:2px;font-size:.62rem;color:#ffe3da;box-shadow:0 3px 9px #000b,inset 0 1px rgba(255,200,190,.12)}
+.hp-wrap .block-badge b{font-size:.78rem}
+
+/* ===== Vitals structure pass: grouped, aligned, readable ===== */
+/* Player cluster becomes one grounded plate instead of floating parts */
+.fighter-readout{
+  width:206px;padding:9px 11px 12px;
+  background:linear-gradient(180deg,rgba(12,19,15,.82),rgba(8,13,10,.9));
+  border:1px solid #46564a;border-radius:10px;
+  box-shadow:0 8px 20px #000a,inset 0 1px rgba(255,255,255,.06);
+}
+.fighter-readout>b{display:block;margin:0 0 5px;color:#f0d27d;font:700 .82rem var(--scribble);letter-spacing:.02em;text-shadow:0 2px 3px #000}
+
+/* HP numbers: dark data-chips on the bar's right end — readable over any fill */
+.enemy-unit .enemy-health small,.fighter-health small{
+  left:auto;right:3px;top:50%;transform:translateY(-50%);padding:1px 7px;
+  border-radius:6px;background:rgba(6,10,9,.86);border:1px solid rgba(255,255,255,.15);
+  color:#ffe9c9;font:800 .62rem/1.4 Arial,sans-serif;text-shadow:0 1px 2px #000;
+}
+.fighter-health{flex:1 1 auto}
+
+/* Intent badges: anchored from the shared ground line, so every card's badge aligns */
+.enemy-unit .intent-pip{top:auto;bottom:82px}
+
+/* Block / shield badges: in-flow beside the bar, nothing clips a corner */
+.hp-wrap .block-badge{position:static;transform:none;order:-1;margin-right:6px;flex:0 0 auto}
+.hp-wrap .enemy-shield-badge{position:static;margin-right:6px;flex:0 0 auto}
+.incoming-tag{bottom:-16px;right:2px}
+
+/* Enemies stand in a soft ground pool; art gets a rim of light */
+.enemy-unit{background:radial-gradient(ellipse 72% 24% at 50% 84%,rgba(5,11,8,.52),transparent 72%)}
+.enemy-art-unit img{filter:drop-shadow(0 0 12px rgba(215,173,88,.16)) drop-shadow(0 9px 10px rgba(0,0,0,.55))}
+
+/* Nameplate-to-bar rhythm */
+.enemy-unit b{margin:8px auto 5px}
+.enemy-unit .enemy-health{margin-top:3px}
+
+/* Enemy pack: keep the last card clear of the stage edge */
+.enemy-pack{padding-inline:14px}
+.enemy-unit .enemy-health small,.fighter-health small{color:#fff;font-size:.64rem}
+
+/* ===== Flat & borderless: floating icons, soft shadows, no containers ===== */
+/* Intent: icon + number floating above each enemy, nothing boxed */
+.enemy-unit .intent-pip{
+  min-width:0;padding:0;gap:6px;border:0;border-radius:0;background:transparent;
+  box-shadow:none;font-size:.86rem;color:#fff;
+}
+.intent-pip .sword-icon{width:15px;height:19px;filter:drop-shadow(0 2px 2px #000)}
+.intent-pip .shield-icon{width:16px;height:19px;filter:drop-shadow(0 2px 2px #000)}
+.intent-pip b{color:#fff;text-shadow:0 2px 3px #000,0 0 6px #000}
+.intent-pip .pip-glyph{text-shadow:0 2px 3px #000}
+.intent-pip .loot-mark{color:#f2d98c;text-shadow:0 2px 3px #000}
+.intent-pip::after{content:none}
+.intent-pip.is-charge b{color:#f2d98c}
+.intent-pip.is-guard b{color:#c9f3dc}
+.enemy-unit .intent-pip{bottom:72px}
+
+/* Bars: flat rounded tracks, no borders, no gloss — just a soft drop shadow */
+.enemy-unit .enemy-health,.fighter-health{
+  height:15px;border:0;outline:0;border-radius:8px;
+  background:rgba(5,9,8,.68);
+  box-shadow:0 3px 9px #0008;
+}
+.enemy-unit .enemy-health i,.fighter-health i[data-battle-player-bar]{
+  border-radius:8px;
+  background:linear-gradient(180deg,#e8735a,#a63f30);
+  box-shadow:none;
+}
+.enemy-unit .enemy-health::after,.fighter-health::after{content:none}
+
+/* Numbers and names: text with shadow, never chips or pills */
+.enemy-unit .enemy-health small,.fighter-health small{
+  right:6px;padding:0;background:transparent;border:0;border-radius:0;
+  color:#fff;font:800 .66rem/1 Arial,sans-serif;text-shadow:0 1px 2px #000,0 0 5px #000;
+}
+.enemy-unit b{
+  padding:2px 6px;background:transparent;border:0;border-radius:0;box-shadow:none;
+  color:#efe6d2;font:700 .72rem var(--scribble);text-shadow:0 2px 3px #000;
+}
+
+/* Block: floating shield icon + number, nothing boxed */
+.hp-wrap .block-badge{
+  height:auto;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;gap:4px;
+}
+.hp-wrap .block-badge .shield-icon{width:18px;height:21px;filter:drop-shadow(0 2px 2px #000)}
+.hp-wrap .block-badge b{color:#d9f5e4;font-size:.86rem;text-shadow:0 2px 3px #000,0 0 5px #000}
+.hp-wrap .block-badge.is-retained{border:0;background:transparent;box-shadow:none;color:#f2dc9b}
+.hp-wrap .block-badge.is-retained b{color:#f2dc9b}
+.hp-wrap .block-badge.is-retained::after{color:#f2d98c;text-shadow:0 2px 3px #000}
+.hp-wrap .enemy-shield-badge{width:auto;height:auto;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.hp-wrap .enemy-shield-badge .shield-icon{width:17px;height:20px;filter:drop-shadow(0 2px 2px #000)}
+
+/* Player cluster: floats too — no panel */
+.fighter-readout{width:196px;padding:0 0 15px;background:transparent;border:0;box-shadow:none}
+.fighter-readout>b{color:#f0d27d;text-shadow:0 2px 4px #000}
+
+/* Incoming: flat warning text */
+.incoming-tag{padding:0;border:0;background:transparent;box-shadow:none;color:#ffb3a6;text-shadow:0 2px 3px #000}
+
+/* Action preview: same floating language */
+.fighter-action-preview{min-width:0;height:auto;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.fighter-action-preview svg{width:14px;height:17px;filter:drop-shadow(0 2px 2px #000)}
+.fighter-action-preview b{color:#fff;font-size:.82rem;text-shadow:0 2px 3px #000}
+
+/* ===== Reference match: stacked intent, centered numbers, bright flat red ===== */
+/* Intent: icon on top, number beneath — one vertical glyph per enemy */
+.enemy-unit .intent-pip{flex-direction:column;gap:2px;bottom:96px}
+.intent-pip b{font-size:.8rem}
+
+/* HP numbers: centered on the bar, plain white */
+.enemy-unit .enemy-health small{
+  left:0;right:0;padding:0;top:50%;transform:translateY(-50%);
+  display:flex;justify-content:center;
+}
+.fighter-health small{left:0;right:0;text-align:center}
+
+/* Bright flat red fill, Spire-style */
+.enemy-unit .enemy-health i,.fighter-health i[data-battle-player-bar]{background:linear-gradient(180deg,#dd5c4b,#b23a2e)}
+
+/* Player block: floats below-left of the bar */
+.fighter-vitals .hp-wrap .block-badge{position:absolute;left:2px;right:auto;top:calc(100% + 5px);transform:none;margin:0}
+.fighter-vitals .hp-wrap .block-badge.is-breaking{animation:block-shatter .52s ease-out forwards}
+@keyframes block-shatter-vitals{35%{transform:scale(1.22);filter:brightness(1.55)}100%{transform:scale(.45);opacity:0}}
+.fighter-vitals .hp-wrap .block-badge.is-breaking{animation:block-shatter-vitals .52s ease-out forwards}
+
+/* ===== Combat HUD cleanup: one quiet, proportional readout system ===== */
+/* Enemy intent belongs to the creature, not to the ground-line UI. */
+.enemy-unit .intent-pip{
+  top:-27px;bottom:auto;
+  min-height:25px;padding:3px 7px;
+  flex-direction:row;gap:5px;
+  border:0;border-radius:13px;
+  background:rgba(7,12,10,.56);
+  box-shadow:0 3px 10px rgba(0,0,0,.42);
+  backdrop-filter:blur(2px);
+}
+.location-elite .intent-pip,.location-joule .intent-pip{top:-31px}
+.intent-pip .sword-icon{width:14px;height:17px}
+.intent-pip .shield-icon{width:15px;height:18px}
+.intent-pip b{font-size:.76rem;line-height:1;color:#fff}
+.intent-pip.is-charge b{color:#f2d98c}
+.intent-pip.is-guard b{color:#d6f2df}
+.enemy-unit:not(.is-defeated):hover .intent-pip,
+.enemy-unit.is-targeted .intent-pip{background:rgba(7,12,10,.68)}
+
+/* Keep every enemy's name, health track and value on a shared centre line. */
+.enemy-unit b{width:min(176px,100%);margin:7px auto 4px;padding:0;text-align:center;line-height:1.15}
+.enemy-unit .hp-wrap{display:flex;align-items:center;justify-content:center;width:min(176px,100%);min-height:15px}
+.enemy-unit .enemy-health{width:100%;height:14px;margin:0}
+.enemy-unit .enemy-health small{font-size:.62rem}
+
+/* Explorer: shield/action, health and incoming damage now use one baseline. */
+.fighter-readout{width:210px;padding:0 0 8px}
+.fighter-readout>b{margin:0 0 5px;text-align:center}
+.fighter-vitals{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;min-height:24px}
+.fighter-vitals>.hp-wrap{display:flex;align-items:center;flex:1 1 auto;min-width:0}
+.fighter-vitals .hp-wrap .block-badge{
+  position:static;order:-1;transform:none;
+  width:auto;height:24px;margin:0 6px 0 0;padding:0;
+  display:inline-flex;align-items:center;gap:3px;
+  background:transparent;border:0;box-shadow:none;
+}
+.fighter-vitals .hp-wrap .block-badge .shield-icon{width:18px;height:21px;filter:drop-shadow(0 2px 3px #000)}
+.fighter-vitals .hp-wrap .block-badge b{font-size:.72rem;color:#d8f2e1;text-shadow:0 2px 3px #000}
+.fighter-health{height:14px;min-width:0;width:100%}
+.fighter-health small{font-size:.62rem}
+.fighter-action-preview{min-width:24px;min-height:24px;gap:4px}
+.fighter-action-preview svg{width:17px;height:20px}
+.fighter-action-preview b{font-size:.74rem}
+.incoming-tag{right:0;top:calc(100% + 5px);bottom:auto;font-size:.58rem;line-height:1}
+
+@media(max-width:780px){
+  .fighter-readout{width:172px}
+  .enemy-unit .intent-pip{top:-23px;padding:2px 5px}
+  .enemy-unit .hp-wrap,.enemy-unit b{width:min(142px,100%)}
+}
+
+/* ===== Combat information pass: fewer, larger symbols ===== */
+.enemy-unit .intent-pip{
+  top:4px;min-height:42px;padding:6px 12px;gap:8px;border-radius:21px;
+  background:rgba(6,11,9,.68);box-shadow:0 4px 14px rgba(0,0,0,.48);
+}
+.location-elite .intent-pip,.location-joule .intent-pip{top:0}
+.intent-pip .sword-icon{width:clamp(25px,1.55vw,32px);height:clamp(30px,1.9vw,38px)}
+.intent-pip .shield-icon{width:clamp(26px,1.6vw,33px);height:clamp(31px,1.95vw,39px)}
+.intent-pip .pip-glyph{font-size:clamp(1.35rem,1.45vw,1.75rem);line-height:1}
+.intent-pip b{font-size:clamp(.96rem,1.05vw,1.2rem);line-height:1}
+
+/* A Block value lives inside one shield instead of beside several shields. */
+.fighter-vitals .hp-wrap .block-badge{
+  position:relative;width:31px;height:34px;min-width:31px;margin-right:8px;
+  display:grid;place-items:center;
+}
+.fighter-vitals .hp-wrap .block-badge .shield-icon{width:31px;height:34px}
+.fighter-vitals .hp-wrap .block-badge b{
+  position:absolute;z-index:2;inset:0;display:grid;place-items:center;
+  padding-top:1px;color:#fff;font-size:.7rem;line-height:1;
+}
+
+/* Pending action uses the same large, single-symbol treatment. */
+.fighter-action-preview{min-width:31px;min-height:32px;gap:6px}
+.fighter-action-preview svg{width:22px;height:26px}
+.fighter-action-preview b{font-size:.86rem}
+.fighter-action-preview.is-block{position:relative;width:31px}
+.fighter-action-preview.is-block .preview-shield{width:31px;height:34px}
+.fighter-action-preview.is-block b{position:absolute;inset:0;display:grid;place-items:center;padding-top:1px;color:#fff;font-size:.7rem}
+
+/* The ghost segment already communicates danger; the label needs no second sword. */
+.incoming-tag{display:inline-flex;align-items:baseline;gap:4px;font-size:.63rem}
+.incoming-tag b{font-size:.82rem;color:#ffd27c}
+.incoming-tag span{color:#ffb3a6;letter-spacing:.03em}
+
+@media(max-width:780px){
+  .enemy-unit .intent-pip{top:2px;min-height:32px;padding:4px 8px}
+  .intent-pip .sword-icon{width:18px;height:22px}
+  .intent-pip .shield-icon{width:19px;height:23px}
+  .intent-pip b{font-size:.84rem}
+}
+
+/* ===== Target marker: separate navigation feedback from enemy intent ===== */
+.enemy-unit.is-targeted::after,.enemy-unit.is-drop-target::after{content:none}
+.enemy-unit.is-targeted .unit-art::before,
+.enemy-unit.is-drop-target .unit-art::before{
+  content:"▼";position:absolute;z-index:9;left:50%;top:-38px;
+  color:#ffd27c;font:900 1.65rem/1 Arial,sans-serif;
+  text-shadow:0 3px 6px #000,0 0 10px rgba(255,184,72,.58);
+  pointer-events:none;
+  animation:target-marker-bob .72s ease-in-out infinite alternate;
+}
+@keyframes target-marker-bob{
+  from{transform:translate(-50%,0)}
+  to{transform:translate(-50%,-11px)}
+}
+@media(max-width:780px){
+  .enemy-unit.is-targeted .unit-art::before,
+  .enemy-unit.is-drop-target .unit-art::before{top:-32px;font-size:1.4rem}
+}
+
+/* ===== Explorer vitals: one shield, one bar, one quiet forecast ===== */
+/* The former ghost segment looked like a second health value. The concise
+   Incoming label below the bar carries the same information more clearly. */
+.fighter-health .health-ghost{display:none!important}
+
+/* A resolved Block badge replaces an identical pending Block preview. */
+.fighter-vitals:has(.block-badge:not(.hidden))>.fighter-action-preview.is-block{display:none}
+
+.fighter-readout{width:220px;padding-bottom:12px}
+.fighter-readout>b{margin-bottom:7px;font-size:.78rem}
+.fighter-vitals{gap:6px;min-height:22px}
+.fighter-vitals .hp-wrap .block-badge{
+  width:27px;height:29px;min-width:27px;margin-right:7px;
+}
+.fighter-vitals .hp-wrap .block-badge .shield-icon{width:27px;height:29px}
+.fighter-vitals .hp-wrap .block-badge b{padding-top:1px;font-size:.59rem;text-shadow:0 1px 2px #000}
+.fighter-health{height:15px;background:rgba(5,9,8,.76);box-shadow:0 3px 8px #0008}
+.fighter-health small{
+  left:0;right:0;top:50%;transform:translateY(-50%);
+  color:#fff;font:700 .57rem/1 Arial,sans-serif;letter-spacing:.025em;
+  text-shadow:0 1px 2px rgba(0,0,0,.9);
+}
+.incoming-tag{
+  top:calc(100% + 6px);right:2px;gap:5px;
+  color:#d6cfc0;font:700 .51rem/1 Arial,sans-serif;
+  letter-spacing:.07em;text-transform:uppercase;text-shadow:0 1px 3px #000;
+}
+.incoming-tag span{color:#d6cfc0;letter-spacing:.07em}
+.incoming-tag b{color:#f0c86f;font:800 .61rem/1 Arial,sans-serif;text-shadow:0 1px 3px #000}
+
+@media(max-width:780px){
+  .fighter-readout{width:176px}
+  .fighter-vitals .hp-wrap .block-badge{width:24px;height:27px;min-width:24px;margin-right:5px}
+  .fighter-vitals .hp-wrap .block-badge .shield-icon{width:24px;height:27px}
+}
+
+/* Final alignment lock: discard the redundant last-card emblem and prevent
+   older generic <b> rules from pulling the Block value out of its shield. */
+.fighter-action-preview{display:none!important}
+.fighter-vitals .hp-wrap .block-badge{
+  position:relative!important;left:auto!important;right:auto!important;top:auto!important;
+  flex:0 0 27px!important;margin:0 9px 0 0!important;transform:none!important;
+  display:grid!important;grid-auto-flow:row!important;grid-template:1fr/1fr!important;
+  place-items:center!important;gap:0!important;
+}
+.fighter-vitals .hp-wrap .block-badge::before{content:none!important;display:none!important}
+.fighter-vitals .hp-wrap .block-badge .shield-icon{grid-area:1/1!important;display:block!important}
+.fighter-vitals .hp-wrap .block-badge b{
+  position:relative!important;z-index:2!important;grid-area:1/1!important;
+  left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;
+  width:auto!important;height:auto!important;margin:0!important;padding:1px 0 0!important;
+  display:block!important;transform:none!important;
+  color:#fff!important;font:800 .58rem/1 Arial,sans-serif!important;text-align:center!important;
+}
+.incoming-tag{
+  left:auto!important;right:1px!important;width:max-content!important;
+  justify-content:flex-start!important;align-items:baseline!important;gap:5px!important;
+}
+.incoming-tag b{display:inline!important;width:auto!important;margin:0!important;padding:0!important}

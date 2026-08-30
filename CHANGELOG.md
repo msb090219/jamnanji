@@ -2,6 +2,20 @@
 
 This file records the major development milestones for Jamnanji. The project follows semantic versioning while it is in early access: minor versions represent substantial playable milestones and patch versions represent fixes or smaller refinements.
 
+## [0.9.0] — Build 0830 — 2026-08-30
+
+### NCEA Mechanics theory-bank rebuild
+
+- Audited the playable bank against the four content areas in AS91524 Explanatory Note 4.
+- Refocused act pools on translational motion, rotating systems, circular motion and gravity, and oscillating systems.
+- Added a 46-question written-theory core covering centre of mass, 2-D momentum and impulse, angular kinematics, torque, rotational inertia, angular momentum, rotational energy, multi-force circular motion, gravitation, satellite motion, SHM equations and phase, phasors, damping, driving, resonance, and energy.
+- Individually reviewed legacy candidates and replaced the permissive text filter with an explicit approval list, preventing shallow or off-scope legacy material from entering a run.
+- Reframed difficulty as Achievement relationships, Merit linked explanations, and Excellence multi-principle justification.
+- Excluded numerical-substitution questions from the playable draw engine while retaining symbolic derivations and proof-style reasoning.
+- Preserved random selection and per-run repeat prevention.
+- Added answer-length-aware randomisation so the longest response is no longer the default giveaway; balanced questions are preferred while order remains random within each tier.
+- Extended Act III from nine to 11 floors and made vertical map spacing responsive to each act's length so its routes remain legible and clear of the boss node.
+
 ## [0.8.0] — Build 0826 — 2026-08-26
 
 ### Expedition and progression
@@ -80,4 +94,3 @@ This file records the major development milestones for Jamnanji. The project fol
 
 - Replaced the earliest player character artwork with silhouette-based placeholders while the final illustrated direction was developed.
 - Established the dark jungle, parchment-card, gold, red, and desaturated green visual language used by the current game.
-

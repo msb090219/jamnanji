@@ -695,6 +695,9 @@ function generateMap(actNumber = 1) {
   const floors = act.floors;
   const generated = [{ id: 'start', x: 50, y: 95, floor: 0, label: act.gateLabel, icon: '▲', kind: 'gate', encounter: null, links: [] }];
   const floorGroups = [];
+  // Fit every act between the gate and boss instead of assuming an eight-floor
+  // act. Act III can therefore be longer without overlapping its guardian.
+  const verticalStep = 88 / (floors + 1);
 
   for (let floor = 1; floor <= floors; floor += 1) {
     const count = floor === 1 ? 2 : 3 + (Math.random() < .32 ? 1 : 0);
@@ -703,7 +706,7 @@ function generateMap(actNumber = 1) {
       const id = `f${floor}n${column}`;
       const spacing = 78 / Math.max(1, count - 1);
       const x = count === 1 ? 50 : 11 + column * spacing + (Math.random() * 4 - 2);
-      const y = 95 - floor * 9.6 + (Math.random() * 1.8 - .9);
+      const y = 95 - floor * verticalStep + (Math.random() * Math.min(1.8, verticalStep * .18) - Math.min(.9, verticalStep * .09));
       const node = { id, x, y, floor, kind: null, icon: '', label: '', encounter: null, links: [] };
       generated.push(node); group.push(node);
     }
@@ -766,7 +769,7 @@ function renderTitle() {
           <p>The Hidden Joules</p>
         </div>
       </div>
-      <div class="menu-version">EARLY ACCESS · v0.8.0 · BUILD 0826</div>
+      <div class="menu-version">EARLY ACCESS · v0.9.0 · BUILD 0830</div>
     </section>`;
   const menuItems = [...document.querySelectorAll('.menu-choice:not(:disabled)')];
   let selected = 0;
@@ -1279,13 +1282,14 @@ const HAND_SIZE = 5;
 // Shared gradient sword icon — injected once, referenced everywhere intents,
 // previews and damage tags need an attack marker.
 const SWORD_SVG = `<svg class="sword-icon" viewBox="0 0 20 27" aria-hidden="true" focusable="false"><path d="M10 .9 13.5 5.1 V15.3 H6.5 V5.1 Z" fill="url(#jam-sword-grad)" stroke="#161b1d" stroke-width="1.1" stroke-linejoin="round"/><path d="M10 2.8 V15.3" stroke="rgba(255,255,255,.45)" stroke-width="1"/><rect x="2.4" y="15.3" width="15.2" height="2.8" rx="1.4" fill="#c9a653" stroke="#161b1d" stroke-width=".8"/><rect x="8.4" y="18.1" width="3.2" height="5.7" rx="1.3" fill="#7a5a2e" stroke="#161b1d" stroke-width=".8"/><circle cx="10" cy="25.2" r="1.8" fill="#c9a653" stroke="#161b1d" stroke-width=".8"/></svg>`;
+const SHIELD_SVG = `<svg class="shield-icon" viewBox="0 0 24 27" aria-hidden="true" focusable="false"><path d="M12 1.5 21 5v7.2c0 6.1-3.7 10.4-9 13.1-5.3-2.7-9-7-9-13.1V5Z" fill="url(#jam-shield-grad)" stroke="#161b1d" stroke-width="1.1" stroke-linejoin="round"/><path d="M12 5.2 V19.8" stroke="rgba(255,255,255,.35)" stroke-width="1"/><path d="M7.4 9.5 h9.2" stroke="rgba(255,255,255,.25)" stroke-width="1"/></svg>`;
 function ensureIconDefs() {
   if (document.getElementById('jam-icon-defs')) return;
   const holder = document.createElement('div');
   holder.id = 'jam-icon-defs';
   holder.setAttribute('aria-hidden', 'true');
   holder.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
-  holder.innerHTML = '<svg width="0" height="0"><defs><linearGradient id="jam-sword-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9a8"/><stop offset=".5" stop-color="#dde6ec"/><stop offset="1" stop-color="#8fa0ac"/></linearGradient></defs></svg>';
+  holder.innerHTML = '<svg width="0" height="0"><defs><linearGradient id="jam-sword-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9a8"/><stop offset=".5" stop-color="#dde6ec"/><stop offset="1" stop-color="#8fa0ac"/></linearGradient><linearGradient id="jam-shield-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fd3ac"/><stop offset=".55" stop-color="#5a9a6d"/><stop offset="1" stop-color="#2e5a3c"/></linearGradient></defs></svg>';
   document.body.appendChild(holder);
 }
 
@@ -1325,11 +1329,14 @@ function updateBattleActionPreview(battle) {
   const previewEl = document.querySelector('[data-battle-action-preview]');
   if (!previewEl) return;
   const preview = cardActionPreview(battle.played.at(-1), battle);
-  previewEl.classList.toggle('hidden', !preview);
+  // Once Block is active, its shield beside the health bar is the source of
+  // truth. Do not repeat the same shield as a separate "last card" preview.
+  const visiblePreview = preview?.kind === 'block' && battle.block > 0 ? null : preview;
+  previewEl.classList.toggle('hidden', !visiblePreview);
   previewEl.classList.toggle('is-block', preview?.kind === 'block');
   previewEl.classList.toggle('is-attack', preview?.kind === 'attack');
-  previewEl.querySelector('b').textContent = preview?.amount ?? '';
-  previewEl.setAttribute('aria-label', preview ? `${preview.kind === 'block' ? 'Block' : 'Damage'} ${preview.amount}` : 'No action selected');
+  previewEl.querySelector('b').textContent = visiblePreview?.amount ?? '';
+  previewEl.setAttribute('aria-label', visiblePreview ? `${visiblePreview.kind === 'block' ? 'Block' : 'Damage'} ${visiblePreview.amount}` : 'No action selected');
 }
 
 // Cards now spend Energy the moment they are played, so this is a plain read.
@@ -1353,6 +1360,56 @@ function cardTile(instance, options = {}) {
   </button>`;
 }
 
+function pileViewerCard(instance) {
+  const def = cardDef(instance.id);
+  if (!def) return '';
+  const upgraded = instance.upgraded;
+  return `<article class="card-tile card-type-${def.type}${upgraded ? ' is-upgraded' : ''}">
+    <span class="card-cost"><small>Cost:</small> ${energyCostMarks(cardEnergyCost(instance))}</span>
+    <b class="card-name">${def.name}${upgraded ? '+' : ''}</b>
+    <span class="card-type">${def.type === 'attack' ? '⚔ Attack' : def.type === 'skill' ? '⛨ Skill' : '✦ Power'}</span>
+    <span class="card-text">${upgraded ? def.up : def.text}</span>
+    <span class="card-topic">${def.topic || 'any topic'}</span>
+  </article>`;
+}
+
+function closeBattlePileViewer() {
+  const overlay = document.querySelector('#battle-pile-overlay');
+  if (!overlay) return;
+  document.removeEventListener('keydown', overlay._escapeHandler, true);
+  overlay.remove();
+}
+
+function openBattlePileViewer(pile) {
+  const battle = hydrateUnits(state.battle);
+  if (!battle || !['draw', 'discard'].includes(pile)) return;
+  closeBattlePileViewer();
+  const isDraw = pile === 'draw';
+  const cards = [...(isDraw ? battle.drawPile : battle.discardPile)].reverse();
+  const title = isDraw ? 'Draw pile' : 'Discard pile';
+  const note = isDraw ? 'The next card is shown first.' : 'The most recently discarded card is shown first.';
+  const overlay = document.createElement('div');
+  overlay.className = 'battle-pile-overlay';
+  overlay.id = 'battle-pile-overlay';
+  overlay.innerHTML = `<button type="button" class="battle-pile-backdrop" aria-label="Close ${title}"></button>
+    <section class="battle-pile-modal" role="dialog" aria-modal="true" aria-labelledby="battle-pile-title">
+      <header><div><small>Battle ledger · ${cards.length} ${cards.length === 1 ? 'card' : 'cards'}</small><h2 id="battle-pile-title">${title}</h2><p>${note}</p></div><button type="button" class="battle-pile-close" aria-label="Close ${title}">×</button></header>
+      <div class="battle-pile-grid">${cards.map(pileViewerCard).join('') || `<p class="battle-pile-empty">The ${title.toLowerCase()} is empty.</p>`}</div>
+    </section>`;
+  document.body.appendChild(overlay);
+  const close = () => closeBattlePileViewer();
+  overlay.querySelector('.battle-pile-backdrop').addEventListener('click', close);
+  overlay.querySelector('.battle-pile-close').addEventListener('click', close);
+  overlay._escapeHandler = event => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    close();
+  };
+  document.addEventListener('keydown', overlay._escapeHandler, true);
+  overlay.querySelector('.battle-pile-close').focus();
+}
+
 function cardModeHTML(battle) {
   const hand = battle.hand.map((instance, index) => {
     const def = cardDef(instance.id);
@@ -1363,9 +1420,9 @@ function cardModeHTML(battle) {
     <div class="hand-dock"><div class="hand-row" id="hand-row" aria-label="Card hand">${hand || '<span class="hand-empty">No cards remain in hand.</span>'}</div></div>
     <div class="battle-resource-dock" aria-label="Battle resources">
       <span class="energy-orb${battle.energy > 0 ? '' : ' is-spent'}" title="Energy"><small>Energy</small><b>${battle.energy}/${battle.turnEnergy ?? battle.maxEnergy}</b>${energyMarks(1)}</span>
-      <span class="pile-chip" title="Draw pile"><small>Draw</small><b>${battle.drawPile.length}</b><i aria-hidden="true">🂠</i></span>
+      <button type="button" class="pile-chip pile-draw" data-pile-view="draw" title="View cards remaining in draw pile" aria-label="View draw pile, ${battle.drawPile.length} cards"><i aria-hidden="true">▱</i><b>${battle.drawPile.length}</b><small>Draw</small></button>
     </div>
-    <span class="battle-discard-pile" id="battle-discard-pile" title="Discard pile" aria-label="Discard pile"><i aria-hidden="true">🂠</i><b>${battle.discardPile.length}</b><small>Discard</small></span>
+    <button type="button" class="battle-discard-pile" id="battle-discard-pile" data-pile-view="discard" title="View discarded cards" aria-label="View discard pile, ${battle.discardPile.length} cards"><i aria-hidden="true">▰</i><b>${battle.discardPile.length}</b><small>Discard</small></button>
     <button type="button" class="commit-btn" id="commit-turn">End turn</button>
     <span class="sr-only" id="queue-announcer" aria-live="polite"></span>
   </div>`;
@@ -1471,6 +1528,7 @@ function wireCardMode() {
   document.querySelectorAll('[data-hand-card]').forEach(button => {
     wireCardDrag(button, Number(button.dataset.handCard));
   });
+  document.querySelectorAll('[data-pile-view]').forEach(button => button.addEventListener('click', () => openBattlePileViewer(button.dataset.pileView)));
   const commit = document.querySelector('#commit-turn');
   if (commit) commit.addEventListener('click', commitTurn);
 }
@@ -1872,9 +1930,9 @@ function locationActivity(node, encounter) {
     <div class="answers">${encounter.answers.map((answer, index) => `<button class="answer-btn" data-answer="${index}">${answer}</button>`).join('')}</div>`;
 }
 
-// Questions are drawn at random from the tagged bank in questions.js.
-// Every draw prefers questions the player has seen least this run, so
-// encounters keep surfacing fresh material until a topic pool runs dry.
+// Questions are drawn at random from the AS91524 theory bank. Numerical
+// substitution exercises are deliberately excluded: Jamnanji rehearses the
+// written explanations, comparisons, derivations, and proofs used in the exam.
 function currentAct() { return ACTS[Math.min(Math.max(state?.act || 1, 1), ACTS.length) - 1]; }
 function actRestRecovery() { return [16, 20, 24][Math.min(Math.max(state?.act || 1, 1), 3) - 1]; }
 
@@ -1885,7 +1943,21 @@ function levelsForNode(node) {
 
 function shuffleQuestion(entry) {
   const options = entry.answers.map((answer, index) => ({ answer, correct: index === entry.correct })).sort(() => Math.random() - .5);
-  return { question: entry.q, answers: options.map(option => option.answer), correct: options.findIndex(option => option.correct), topic: entry.topic, level: entry.level };
+  return { question: entry.q, answers: options.map(option => option.answer), correct: options.findIndex(option => option.correct), topic: entry.topic, level: entry.level, strand: entry.strand };
+}
+
+function answerLengthTier(question) {
+  const correctLength = question.answers[question.correct].length;
+  const distractorLengths = question.answers
+    .filter((_, index) => index !== question.correct)
+    .map(answer => answer.length);
+  const longestDistractor = Math.max(...distractorLengths);
+
+  // Prefer questions where length is not a useful clue. Small differences are
+  // accepted because exact character matching would make the prose unnatural.
+  if (correctLength <= longestDistractor || correctLength / longestDistractor <= 1.25) return 0;
+  if (correctLength / longestDistractor <= 1.5) return 1;
+  return 2;
 }
 
 function pickQuestions(topics, count, levels = [1, 2, 3]) {
@@ -1893,12 +1965,15 @@ function pickQuestions(topics, count, levels = [1, 2, 3]) {
   const themed = topics?.filter(topic => act.topics.includes(topic));
   const topicList = themed?.length ? themed : act.topics;
   const asked = state?.asked || {};
-  const pool = QUESTION_BANK
-    .filter(q => topicList.includes(q.topic) && levels.includes(q.level) && !asked[q.id])
-    .sort(() => Math.random() - .5)
+  const eligible = QUESTION_BANK.filter(q =>
+    q.theory && topicList.includes(q.topic) && levels.includes(q.level) && !asked[q.id]
+  );
+  const pool = eligible
+    .map(question => ({ question, tier: answerLengthTier(question), random: Math.random() }))
+    .sort((a, b) => a.tier - b.tier || a.random - b.random)
     .slice(0, count);
-  pool.forEach(q => { if (state) state.asked[q.id] = true; });
-  return pool.map(shuffleQuestion);
+  pool.forEach(({ question }) => { if (state) state.asked[question.id] = true; });
+  return pool.map(({ question }) => shuffleQuestion(question));
 }
 
 function drawBattleQuestions(encounterKey, node) {
@@ -1985,8 +2060,8 @@ function unitIntent(unit) {
 function intentLabel(intent) {
   if (intent.kind === 'attack') return `${SWORD_SVG}<b>${intent.damage}</b>`;
   if (intent.kind === 'charge') return `<i class="pip-glyph">⋯</i><b>${intent.damage}</b>`;
-  if (intent.kind === 'drain') return `${SWORD_SVG}<b>${intent.damage}</b><i class="loot-mark">⛁</i>`;
-  if (intent.kind === 'guard') return '<i class="pip-glyph">🛡</i><b>shield</b>';
+  if (intent.kind === 'drain') return `${SWORD_SVG}<b>${intent.damage}</b>`;
+  if (intent.kind === 'guard') return SHIELD_SVG;
   return SWORD_SVG;
 }
 
@@ -2103,15 +2178,13 @@ function battleActors() {
         : `<img src="${unit.def.art}" alt="${name}">`
       : `<span class="unit-glyph shape-${unit.def.shape || 'blob'}" style="--unit-hue:${unit.def.hue ?? 40}" aria-hidden="true">${unit.def.mark}</span>`;
     return `<button type="button" class="enemy-unit ${unit.def.art ? 'enemy-art-unit' : 'enemy-glyph-unit'}${swarm > 1 ? ' enemy-swarm-unit' : ''}${defeated ? ' is-defeated' : ''}${unit.shield ? ' is-shielded' : ''}${unit.def.hover && !defeated ? ' is-hovering' : ''}" style="--enemy-scale:${unit.def.scale || 1};--hover:${unit.def.hover || 0}px" data-enemy="${index}"${defeated ? ' disabled' : ''} aria-label="${name}, ${unit.hp} of ${unit.maxHp} health">
-      <span class="intent-pip is-${intent.kind}" aria-hidden="true">${intentLabel(intent)}</span>
-      <span class="unit-art${swarm > 1 ? ' swarm-art' : ''}">${art}</span>
+      <span class="unit-art${swarm > 1 ? ' swarm-art' : ''}">${art}<span class="intent-pip is-${intent.kind}" aria-hidden="true">${intentLabel(intent)}</span></span>
       <b>${name}</b>
-      <span class="hp-wrap"><span class="block-badge enemy-shield-badge${unit.shield && !defeated ? '' : ' hidden'}" title="Shielded — absorbs the next hit"></span><span class="enemy-health"><i style="width:${unit.hp / unit.maxHp * 100}%"></i></span></span>
-      <small>${unit.hp}/${unit.maxHp}</small>
+      <span class="hp-wrap"><span class="block-badge enemy-shield-badge${unit.shield && !defeated ? '' : ' hidden'}" title="Shielded — absorbs the next hit">${SHIELD_SVG}</span><span class="enemy-health"><i style="width:${unit.hp / unit.maxHp * 100}%"></i><small>${unit.hp}/${unit.maxHp}</small></span></span>
     </button>`;
   }).join('');
   return `<section class="battle-field" data-battle-kind="${battle.kind}" aria-label="Battlefield">
-    <div class="player-combatant"><img src="assets/student-determined-v3-cutout.webp" alt="Explorer ready for battle"><div class="fighter-readout"><b>Explorer</b><div class="fighter-vitals"><span class="fighter-action-preview hidden" data-battle-action-preview aria-label="No action selected"><svg class="preview-shield" viewBox="0 0 24 27" aria-hidden="true"><path d="M12 1.5 21 5v7.2c0 6.1-3.7 10.4-9 13.1-5.3-2.7-9-7-9-13.1V5Z"/></svg><svg class="preview-attack sword-preview" viewBox="0 0 20 27" aria-hidden="true"><path d="M10 .9 13.5 5.1 V15.3 H6.5 V5.1 Z" fill="url(#jam-sword-grad)" stroke="#161b1d" stroke-width="1.1" stroke-linejoin="round"/><path d="M10 2.8 V15.3" stroke="rgba(255,255,255,.45)" stroke-width="1"/><rect x="2.4" y="15.3" width="15.2" height="2.8" rx="1.4" fill="#c9a653" stroke="#161b1d" stroke-width=".8"/><rect x="8.4" y="18.1" width="3.2" height="5.7" rx="1.3" fill="#7a5a2e" stroke="#161b1d" stroke-width=".8"/><circle cx="10" cy="25.2" r="1.8" fill="#c9a653" stroke="#161b1d" stroke-width=".8"/></svg><b></b></span><span class="hp-wrap"><span class="block-badge hidden" data-battle-block title="Block — absorbs incoming damage this exchange"><b>0</b></span><div class="fighter-health"><i data-battle-player-bar style="width:${state.health / state.maxHealth * 100}%"></i><i class="health-ghost hidden" data-battle-incoming aria-hidden="true"></i><small data-battle-player-health>${state.health}/${state.maxHealth}</small></div><span class="incoming-tag hidden" data-battle-incoming-label></span></span></div></div></div>
+    <div class="player-combatant"><img src="assets/student-determined-v3-cutout.webp" alt="Explorer ready for battle"><div class="fighter-readout"><b>Explorer</b><div class="fighter-vitals"><span class="fighter-action-preview hidden" data-battle-action-preview aria-label="No action selected"><svg class="preview-shield" viewBox="0 0 24 27" aria-hidden="true"><path d="M12 1.5 21 5v7.2c0 6.1-3.7 10.4-9 13.1-5.3-2.7-9-7-9-13.1V5Z"/></svg><svg class="preview-attack sword-preview" viewBox="0 0 20 27" aria-hidden="true"><path d="M10 .9 13.5 5.1 V15.3 H6.5 V5.1 Z" fill="url(#jam-sword-grad)" stroke="#161b1d" stroke-width="1.1" stroke-linejoin="round"/><path d="M10 2.8 V15.3" stroke="rgba(255,255,255,.45)" stroke-width="1"/><rect x="2.4" y="15.3" width="15.2" height="2.8" rx="1.4" fill="#c9a653" stroke="#161b1d" stroke-width=".8"/><rect x="8.4" y="18.1" width="3.2" height="5.7" rx="1.3" fill="#7a5a2e" stroke="#161b1d" stroke-width=".8"/><circle cx="10" cy="25.2" r="1.8" fill="#c9a653" stroke="#161b1d" stroke-width=".8"/></svg><b></b></span><span class="hp-wrap"><span class="block-badge hidden" data-battle-block title="Block — absorbs incoming damage this exchange">${SHIELD_SVG}<b>0</b></span><div class="fighter-health"><i data-battle-player-bar style="width:${state.health / state.maxHealth * 100}%"></i><i class="health-ghost hidden" data-battle-incoming aria-hidden="true"></i><small data-battle-player-health>${state.health}/${state.maxHealth}</small></div><span class="incoming-tag hidden" data-battle-incoming-label></span></span></div></div></div>
     <div class="enemy-side">
       <div class="enemy-pack" id="enemy-pack">${units}</div>
     </div>
@@ -2373,7 +2446,7 @@ function updateEnemyPack() {
     card.classList.toggle('is-shielded', unit.shield && !defeated);
     if (defeated) card.setAttribute('disabled', '');
     card.querySelector('.enemy-health i').style.width = `${unit.hp / unit.maxHp * 100}%`;
-    card.querySelector('small').textContent = `${unit.hp}/${unit.maxHp}`;
+    card.querySelector('.enemy-health small').textContent = `${unit.hp}/${unit.maxHp}`;
     card.setAttribute('aria-label', `${unitName(battle, index)}, ${unit.hp} of ${unit.maxHp} health${defeated ? ', defeated' : ''}`);
     const shieldBadge = card.querySelector('.enemy-shield-badge');
     if (shieldBadge) shieldBadge.classList.toggle('hidden', !(unit.shield && !defeated));
@@ -2452,7 +2525,7 @@ function updateIncomingPreview() {
   const pct = Math.min(100, damage / state.maxHealth * 100);
   ghost.style.width = `${pct}%`;
   ghost.classList.toggle('hidden', damage <= 0);
-  label.innerHTML = damage > 0 ? `${SWORD_SVG}<b>${damage}</b> incoming` : '';
+  label.innerHTML = damage > 0 ? `<span>Incoming</span><b>${damage}</b>` : '';
   label.classList.toggle('hidden', damage <= 0);
 }
 
