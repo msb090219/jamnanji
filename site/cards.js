@@ -50,6 +50,29 @@ const CARDS = [
   { id: 'escape-velocity', name: 'Escape Velocity', cost: 2, type: 'attack', topic: 'orbital', rarity: 'rare', target: 'enemy', text: 'Deal 12 damage. Double below half health.', up: 'Deal 16 damage. Double below half health.', effect: { k: 'execute', n: 12, up: 16 } }
 ];
 
+const ELECTRICITY_CARDS = [
+  { id: 'spark', name: 'Spark', cost: 1, type: 'attack', topic: 'dc', rarity: 'starter', target: 'enemy', text: 'Deal 5 damage.', up: 'Deal 8 damage.', effect: { k: 'damage', n: 5, up: 8 } },
+  { id: 'insulate', name: 'Insulate', cost: 1, type: 'skill', topic: 'dc', rarity: 'starter', target: 'self', text: 'Gain 6 Block.', up: 'Gain 9 Block.', effect: { k: 'block', n: 6, up: 9 } },
+  { id: 'trace-circuit', name: 'Trace Circuit', cost: 1, type: 'skill', topic: 'dc', rarity: 'starter', target: 'enemy', text: 'Deal 1 damage. Gain 1 Insight.', up: 'Deal 2 damage. Gain 2 Insight.', effect: { k: 'insight', n: 1, up: 2 } },
+  { id: 'parallel-arc', name: 'Parallel Arc', cost: 2, type: 'attack', topic: 'dc', rarity: 'starter', target: 'all', text: 'Deal 4 damage to ALL enemies. Shatters shields.', up: 'Deal 6 damage to ALL enemies.', effect: { k: 'sweep', n: 4, up: 6 } },
+  { id: 'terminal-voltage', name: 'Terminal Voltage', cost: 1, type: 'attack', topic: 'dc', rarity: 'common', target: 'enemy', text: 'Deal 7 damage.', up: 'Deal 10 damage.', effect: { k: 'damage', n: 7, up: 10 } },
+  { id: 'junction-rule', name: 'Junction Rule', cost: 1, type: 'skill', topic: 'dc', rarity: 'common', target: 'self', text: 'Gain 7 Block. Draw 1 card.', up: 'Gain 10 Block. Draw 1 card.', effect: { k: 'block_draw', n: 7, up: 10, draw: 1 } },
+  { id: 'stored-charge', name: 'Stored Charge', cost: 0, type: 'skill', topic: 'capacitors', rarity: 'common', target: 'self', text: 'Gain 4 Block. Draw 1 card.', up: 'Gain 6 Block. Draw 1 card.', effect: { k: 'potential', n: 4, up: 6 } },
+  { id: 'capacitor-release', name: 'Capacitor Release', cost: 2, type: 'attack', topic: 'capacitors', rarity: 'common', target: 'enemy', text: 'Convert all current Block into damage to the target.', up: 'Also regain half as much Block.', effect: { k: 'conserve' } },
+  { id: 'flux-linkage', name: 'Flux Linkage', cost: 1, type: 'attack', topic: 'induction', rarity: 'common', target: 'enemy', text: 'Deal 5 damage. Draw 1 card.', up: 'Deal 8 damage. Draw 1 card.', effect: { k: 'damage_draw', n: 5, up: 8, draw: 1 } },
+  { id: 'lenz-response', name: 'Lenz Response', cost: 1, type: 'attack', topic: 'induction', rarity: 'common', target: 'self', text: 'Deal damage equal to what you took last turn.', up: 'Deal that damage +3.', effect: { k: 'thirdlaw', up: 3 } },
+  { id: 'transformer-step', name: 'Transformer Step', cost: 1, type: 'skill', topic: 'induction', rarity: 'common', target: 'self', text: 'Gain 1 extra Energy next turn. Draw 1 card.', up: 'Gain 2 extra Energy next turn. Draw 1 card.', effect: { k: 'next_energy', n: 1, up: 2, draw: 1 } },
+  { id: 'rms-strike', name: 'RMS Strike', cost: 2, type: 'attack', topic: 'ac', rarity: 'common', target: 'enemy', text: 'Deal 9 damage.', up: 'Deal 13 damage.', effect: { k: 'damage', n: 9, up: 13 } },
+  { id: 'phase-shift', name: 'Phase Shift', cost: 1, type: 'skill', topic: 'ac', rarity: 'common', target: 'self', text: 'Gain 5 Block. Draw 1 card.', up: 'Gain 8 Block. Draw 1 card.', effect: { k: 'block_draw', n: 5, up: 8, draw: 1 } },
+  { id: 'resonant-drive', name: 'Resonant Drive', cost: 2, type: 'skill', topic: 'ac', rarity: 'rare', target: 'self', text: 'Your next card this turn resolves twice.', up: 'Costs 1 instead of 2.', effect: { k: 'resonance' } },
+  { id: 'alternating-pulse', name: 'Alternating Pulse', cost: 2, type: 'attack', topic: 'ac', rarity: 'rare', target: 'enemy', text: 'Deal 4 damage three times.', up: 'Deal 5 damage four times.', effect: { k: 'multi', n: 4, hits: 3, up: 5, upHits: 4 } },
+  { id: 'charge-line', name: 'Charge the Line', cost: 1, type: 'skill', topic: 'capacitors', rarity: 'common', target: 'self', text: 'Charged 4: your next hit deals 4 extra damage.', up: 'Charged 7.', effect: { k: 'charged', n: 4, up: 7 } },
+  { id: 'ground-loop', name: 'Ground Loop', cost: 1, type: 'skill', topic: 'dc', rarity: 'common', target: 'self', text: 'Grounded 5: reduce the next enemy hit by 5.', up: 'Grounded 8.', effect: { k: 'grounded', n: 5, up: 8 } },
+  { id: 'electrocute', name: 'Electrocute', cost: 1, type: 'attack', topic: 'induction', rarity: 'common', target: 'enemy', text: 'Electrocuted 3: deal 3 guaranteed damage after the enemy acts.', up: 'Electrocuted 5.', effect: { k: 'electrocuted', n: 3, up: 5 } }
+];
+
+CARDS.push(...ELECTRICITY_CARDS);
+
 const CARD_INDEX = new Map(CARDS.map(card => [card.id, card]));
 
 function cardDef(id) { return CARD_INDEX.get(id); }
@@ -59,6 +82,11 @@ function cardDef(id) { return CARD_INDEX.get(id); }
 function cardInstance(id, upgraded = false) { return { id, upgraded: !!upgraded }; }
 
 function starterDeck() {
+  if (typeof selectedJourney !== 'undefined' && selectedJourney === 'electricity') return [
+    ...Array.from({ length: 4 }, () => cardInstance('spark')),
+    ...Array.from({ length: 4 }, () => cardInstance('insulate')),
+    cardInstance('trace-circuit'), cardInstance('parallel-arc')
+  ];
   return [
     ...Array.from({ length: 4 }, () => cardInstance('strike')),
     ...Array.from({ length: 4 }, () => cardInstance('brace')),
@@ -69,9 +97,12 @@ function starterDeck() {
 
 // Cards offered as rewards must match the act's curriculum topics.
 function cardPool(actNumber, rarities = ['common', 'rare']) {
-  const act = ACTS[Math.min(Math.max(actNumber, 1), ACTS.length) - 1];
+  const electricity = typeof state !== 'undefined' && state?.journey === 'electricity';
+  const acts = electricity ? ELECTRICITY_ACTS : ACTS;
+  const act = acts[Math.min(Math.max(actNumber, 1), acts.length) - 1];
   return CARDS.filter(card => card.rarity !== 'starter'
     && rarities.includes(card.rarity)
+    && (electricity ? ELECTRICITY_CARDS.includes(card) : !ELECTRICITY_CARDS.includes(card))
     && (card.topic === null || act.topics.includes(card.topic)));
 }
 

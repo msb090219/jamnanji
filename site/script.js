@@ -176,6 +176,62 @@ const locationArt = {
 };
 Object.keys(locationArt).forEach(kind => { locationArt[kind] = modernAsset(locationArt[kind]); });
 
+// Warm only likely next assets, with low priority and two concurrent downloads.
+// This never rolls encounters, changes saves, or blocks navigation on a failed image.
+const warmedImages = new Set();
+const imageWarmQueue = [];
+let imageWarmActive = 0;
+function warmImages(urls) {
+  if (typeof Image === 'undefined' || globalThis.navigator?.connection?.saveData) return;
+  for (const url of urls.filter(Boolean)) {
+    if (warmedImages.has(url)) continue;
+    warmedImages.add(url);
+    imageWarmQueue.push(url);
+  }
+  const pump = () => {
+    while (imageWarmActive < 2 && imageWarmQueue.length) {
+      const url = imageWarmQueue.shift();
+      imageWarmActive++;
+      const image = new Image();
+      image.fetchPriority = 'low';
+      image.decoding = 'async';
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        imageWarmActive--;
+        pump();
+      };
+      const timer = setTimeout(finish, 15000);
+      image.onload = finish;
+      image.onerror = () => { warmedImages.delete(url); finish(); };
+      image.src = url;
+    }
+  };
+  pump();
+}
+
+function warmMapAssets() {
+  if (typeof Image === 'undefined') return;
+  const backgrounds = [], actors = [];
+  const electricity = state.journey === 'electricity';
+  for (const node of nodes.filter(node => state.available.includes(node.id))) {
+    if (journalKinds.includes(node.kind)) {
+      backgrounds.push(electricity ? `assets/electricity-location-${node.kind}.webp` : locationArt[node.kind]);
+    } else if (['encounter', 'elite', 'joule'].includes(node.kind)) {
+      backgrounds.push(electricity ? electricityBattleArt(node.sectionId || electricitySectionAt(state.act, node.floor).id) : battleArt[state.act - 1]);
+      if (node.kind === 'joule') actors.push(currentBossDefinition().art);
+      else {
+        const pool = electricity ? ELECTRICITY_POOLS[node.sectionId || electricitySectionAt(state.act, node.floor).id] : mechanicsSectionAt(state.act, node.floor);
+        actors.push(...pool.mobs.map(id => (electricity ? ELECTRICITY_ENEMIES : ENEMY_ROSTER)[id]?.art));
+        if (node.kind === 'elite') actors.push(electricity ? ELECTRICITY_ENEMIES[pool.elite || 'relayWarden'].art : ACT_ELITES[ACT_POOLS[state.act - 1].elite].art);
+      }
+    }
+  }
+  warmImages([...new Set([...backgrounds, ...actors])].slice(0, 12));
+}
+
 const hazardChallenges = {
   river: {
     prompt: 'The raft is being pulled downstream. Choose the shove that changes its momentum without turning it broadside.',
@@ -281,20 +337,25 @@ function savePreferences() {
 function loadSaveSlots() {
   try {
     const saved = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
-    if (saved?.slots?.length === 3) return saved;
+    if (saved?.slots?.length === 3) return SaveProgress.normalize(saved);
   } catch {}
-  return { version: 1, slots: Array.from({ length: 3 }, (_, index) => ({ id: index, runs: 0, victories: 0, bestFloor: 0, run: null })) };
+  return SaveProgress.normalize(null);
 }
 
-function writeSaveSlots(data) { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); }
+function writeSaveSlots(data) {
+  // Do not duplicate active-run snapshots in the compatibility overview field.
+  localStorage.setItem(SAVE_KEY, JSON.stringify({ ...data, slots: data.slots.map(({ run, ...slot }) => slot) }));
+}
 
 function saveRun() {
-  if (currentSaveSlot < 0 || !state || !nodes.length) return;
+  if (currentSaveSlot < 0 || !state || state.runEnded || !nodes.length) return;
+  // Keep the last complete exchange/card snapshot while animations resolve.
+  if (['playing', 'resolving'].includes(state.battle?.phase)) return;
   const data = loadSaveSlots();
   const slot = data.slots[currentSaveSlot];
   const currentFloor = nodes.find(node => node.id === state.current)?.floor || 0;
   slot.bestFloor = Math.max(slot.bestFloor || 0, currentFloor);
-  slot.run = { state, nodes, journey: selectedJourney, savedAt: Date.now() };
+  SaveProgress.recordRun(slot, { state, nodes, journey: state.journey || selectedJourney, savedAt: Date.now() });
   writeSaveSlots(data);
 }
 
@@ -302,24 +363,33 @@ function clearSavedRun(won = false) {
   if (currentSaveSlot < 0) return;
   const data = loadSaveSlots();
   const slot = data.slots[currentSaveSlot];
-  slot.run = null;
-  if (won) slot.victories = (slot.victories || 0) + 1;
+  SaveProgress.finishRun(slot, state, nodes, won);
+  state.runEnded = true;
   writeSaveSlots(data);
 }
 
-function continueSavedRun(slotIndex) {
+function continueSavedRun(slotIndex, journeyId = selectedJourney) {
   const slot = loadSaveSlots().slots[slotIndex];
-  if (!slot?.run) return;
+  const run = slot?.stories[journeyId]?.run;
+  if (!run) return;
+  const journey = journeys.find(item => item.id === journeyId);
+  if (!journey || !JourneyAccess.forJourney(journey, slot, location.hostname).playable) {
+    selectedJourney = journeyId;
+    return renderJourneySelect();
+  }
   currentSaveSlot = slotIndex;
   localStorage.setItem('jamnanji-active-slot', String(slotIndex));
-  selectedJourney = slot.run.journey || 'mechanics';
-  nodes = slot.run.nodes;
-  state = slot.run.state;
+  selectedJourney = run.state.journey || run.journey || 'mechanics';
+  nodes = run.nodes;
+  state = run.state;
+  normalizeJourneyState(state, selectedJourney);
+  if (state.journey === 'electricity') enterElectricitySection(state, nodes.find(node => node.id === (state.activeNode || state.current))?.floor || 0);
   if (!state.act) state.act = 1;         // saves from before the act system
   if (!state.asked) state.asked = {};
   if (!Array.isArray(state.deck) || !state.deck.length) state.deck = starterDeck(); // pre-card saves
   if (!Array.isArray(state.artifacts)) state.artifacts = [];
   if (!Array.isArray(state.discoveries)) state.discoveries = [];
+  saveRun();
   if (exposeOpeningLocationVariety(nodes, state)) saveRun();
   if (state.pendingCompletion) return finishEncounter();
   if (state.activeNode && state.encounter) startEncounter(state.activeNode, true);
@@ -330,15 +400,16 @@ function startNewRun(slotIndex) {
   const data = loadSaveSlots();
   currentSaveSlot = slotIndex;
   localStorage.setItem('jamnanji-active-slot', String(slotIndex));
-  data.slots[slotIndex].run = null;
-  data.slots[slotIndex].runs = (data.slots[slotIndex].runs || 0) + 1;
+  data.slots[slotIndex].createdAt ||= Date.now();
+  data.slots[slotIndex].updatedAt ||= Date.now();
+  selectedJourney = data.slots[slotIndex].lastJourney;
   writeSaveSlots(data);
   renderJourneySelect();
 }
 
 const journeys = [
   { id: 'mechanics', name: 'Mechanics', act: 'Newton’s Canopy', sigil: 'Φ', status: 'Available', available: true, description: 'A jungle of shifting paths, moving temples and creatures with deeply unreasonable momentum.', objective: 'Recover the Hidden Joule of Mechanics', focus: 'Forces · Motion · Momentum · Energy' },
-  { id: 'electricity', name: 'Electricity', act: 'The Storm Circuit', sigil: 'ϟ', status: 'Sealed', available: false, description: 'A drowned kingdom where lightning travels through the ruins and every route completes a dangerous circuit.', objective: 'The Joule of Electricity remains sealed', focus: 'Current · Voltage · Resistance · Circuits' },
+  { id: 'electricity', name: 'Electricity', act: 'The Storm Circuit', sigil: 'ϟ', status: 'Available', available: true, description: 'A drowned kingdom where lightning travels through the ruins and every route completes a dangerous circuit.', objective: 'Recover the Hidden Joule of Electricity', focus: 'Current · Voltage · Resistance · Circuits' },
   { id: 'waves', name: 'Waves', act: 'The Resonant Depths', sigil: '≋', status: 'Sealed', available: false, description: 'An echoing realm of living frequencies, invisible signals and bridges that answer only to resonance.', objective: 'The Joule of Waves remains sealed', focus: 'Sound · Light · Frequency · Refraction' }
 ];
 
@@ -525,12 +596,98 @@ const cutscenes = {
     endLabel: 'Return to the jungle'
   }
 };
+Object.assign(cutscenes, {
+  electricityPrologue: { background: 'assets/electricity-cutscene-opening.webp', ambient: ['equations'], letterbox: true, studentFrom: 0, lines: [
+    { speaker: 'Narrator', text: 'It started with a board game in a cupboard. No instructions. No manufacturer. Just a blue jewel and a label: DO NOT PLAY DURING A STORM.' },
+    { speaker: 'You', pose: 'neutral', text: 'In my defence, the thunder started after I opened it.' },
+    { speaker: 'Narrator', text: 'The jewel flashes. Your room folds into a thin line of light—and you land ankle-deep in a jungle ruin.', fx: 'flash' },
+    { speaker: 'Narrator', text: 'Copper vines climb the walls. Lamps blink beneath the water. Far above the trees, a tower catches lightning and refuses to let the night go quiet.', fx: 'lightning' },
+    { speaker: 'You', pose: 'startled', text: 'Right. Where is the cupboard?' },
+    { speaker: 'Mr Jamnani', pose: 'neutral', text: 'On the other side of a rather serious electrical fault. I am Mr Jamnani. Welcome to Jamnanji.' },
+    { speaker: 'You', pose: 'overwhelmed', text: 'Is this part of the game?' },
+    { speaker: 'Mr Jamnani', pose: 'explaining', text: 'This is the Storm Circuit: an ancient network that once lit the jungle and kept its gates open. The Hidden Joule of Electricity was its heart.' },
+    { speaker: 'Narrator', text: 'A pulse travels along the copper vines. Somewhere in the dark, something clicks back.', fx: 'rum' },
+    { speaker: 'Mr Jamnani', pose: 'warning', text: 'Now the Stormheart holds that Joule inside the spire. The network feeds its guardians, the gates are sealed, and the storms never quite end.' },
+    { speaker: 'You', pose: 'startled', text: 'And I have just landed in the network.' },
+    { speaker: 'Mr Jamnani', pose: 'neutral', text: 'Yes. Your timing is dreadful. Your arrival point, however, is useful.' },
+    { speaker: 'Mr Jamnani', pose: 'explaining', text: 'The route begins in the supply ruins. Beyond them lie the Induction Wilds, then the Resonant Spire. Each region has a guardian between you and the Joule.' },
+    { speaker: 'You', pose: 'determined', text: 'Get to the tower. Recover the Joule. Open a way home.' },
+    { speaker: 'Mr Jamnani', pose: 'explaining', text: 'Exactly. Read enemy intentions before playing your cards. Seek rest and supplies along the route. Understanding the circuit will matter more than guessing confidently.' },
+    { speaker: 'Narrator', text: 'A blue spark skips between two stone claws. What you thought was a broken capacitor lifts itself out of the mud.', fx: 'lightning' },
+    { speaker: 'You', pose: 'startled', text: 'That equipment has legs.' },
+    { speaker: 'Mr Jamnani', pose: 'disappointed', text: 'And a remarkably poor attitude towards visitors. Before it notices us—any questions?', choices: true }
+  ], choices: [
+    { label: 'Why can’t you recover the Joule?', reply: 'I can guide you, but the board brought you here. Apparently it considered my application too sensible.' },
+    { label: 'Can we unplug the tower?', reply: 'An excellent ambition. Unfortunately, the jungle did not install a convenient wall socket.' },
+    { label: 'Let’s get that gate open.', reply: 'Good. One careful decision at a time. Start with the creature currently inspecting your shoelaces.' }
+  ], endLabel: 'Enter the Storm Circuit' },
+  electricityAct2: { background: 'assets/electricity-cutscene-act-ii.webp', ambient: ['equations'], letterbox: true, studentFrom: 0, lines: [
+    { speaker: 'Narrator', text: 'Behind you, the supply ruins settle into a steady glow. Ahead, a gate unfolds into a marsh threaded with enormous copper coils.', fx: 'lightning' },
+    { speaker: 'You', pose: 'neutral', text: 'The lamps are working. That is good, right?' },
+    { speaker: 'Mr Jamnani', pose: 'warning', text: 'For the ruins, yes. But the spire has noticed the interruption. Listen.' },
+    { speaker: 'Narrator', text: 'Deep in the marsh, a rotor begins to turn. Nearby loops flicker as magnets sweep past them. Something enormous moves between the trees.', fx: 'rum' },
+    { speaker: 'Mr Jamnani', pose: 'explaining', text: 'The Induction Wilds transfer energy through changing magnetic fields. Follow the transmission route and we will find what guards the next gate.' },
+    { speaker: 'You', pose: 'determined', text: 'Preferably before it finds us.' }
+  ], endLabel: 'Enter the Induction Wilds' },
+  electricityAct3: { background: 'assets/electricity-cutscene-act-iii.webp', ambient: ['equations'], letterbox: true, studentFrom: 0, lines: [
+    { speaker: 'Narrator', text: 'The marsh machinery falls quiet. Through the thinning mist, the Resonant Spire finally fills the sky.', fx: 'rum' },
+    { speaker: 'Narrator', text: 'Light runs up its ribs, fades, then returns. Hanging rings sway to the same insistent rhythm.' },
+    { speaker: 'You', pose: 'overwhelmed', text: 'The whole tower is humming.' },
+    { speaker: 'Mr Jamnani', pose: 'warning', text: 'Alternating currents feed it. Different parts respond with different timing—and the Stormheart has tuned the system to its advantage.' },
+    { speaker: 'You', pose: 'determined', text: 'Then we learn its rhythm. We have not come this far to become a doorbell.' },
+    { speaker: 'Mr Jamnani', pose: 'neutral', text: 'Agreed. The Joule is at the summit. Watch your footing, and what leads or lags.' }
+  ], endLabel: 'Climb the Resonant Spire' },
+  electricityBoss1: { background: 'assets/electricity-cutscene-accumulator.webp', ambient: ['equations'], letterbox: true, studentFrom: 0, lines: [
+    { speaker: 'Narrator', text: 'The vault door is already open. Unfortunately, the vault itself stands up.', fx: 'rum' },
+    { speaker: 'You', pose: 'startled', text: 'Please tell me that is the welcome committee.' },
+    { speaker: 'Mr Jamnani', pose: 'warning', text: 'The Accumulator. Those plates store separated charge; the electric field stores energy. Do not mistake a pause for surrender.' },
+    { speaker: 'Narrator', text: 'Light gathers between its copper rings. Behind it, the gate to the marsh snaps shut.', fx: 'lightning' },
+    { speaker: 'You', pose: 'determined', text: 'We need that gate. I suppose asking nicely is out.' },
+    { speaker: 'Mr Jamnani', pose: 'warning', text: 'Read its intent. Prepare for the discharge. Then make your opening count.' }
+  ], endLabel: 'Face the Accumulator' },
+  electricityBoss2: { background: 'assets/electricity-cutscene-induction.webp', ambient: ['equations'], letterbox: true, studentFrom: 0, lines: [
+    { speaker: 'Narrator', text: 'The bridge rises out of the marsh. Then it turns its head. You have been walking towards the shoulders of the Induction Colossus.', fx: 'rum' },
+    { speaker: 'You', pose: 'overwhelmed', text: 'I would like to amend my definition of enormous.' },
+    { speaker: 'Narrator', text: 'Its core turns inside a cage of coils. Lamps flare along its arms as the magnetic flux through the coils changes.', fx: 'lightning' },
+    { speaker: 'Mr Jamnani', pose: 'explaining', text: 'Induced currents oppose the change that produces them. This guardian makes a weapon of that response.' },
+    { speaker: 'You', pose: 'determined', text: 'Then we watch what changes—not just what moves.' },
+    { speaker: 'Mr Jamnani', pose: 'warning', text: 'Good. The stairs to the spire are behind it. Let us persuade it to stop being the bridge.' }
+  ], endLabel: 'Face the Colossus' },
+  electricityBoss3: { background: 'assets/electricity-cutscene-joule.webp', ambient: ['equations'], letterbox: true, studentFrom: 0, lines: [
+    { speaker: 'Narrator', text: 'At the summit, the blue Joule hangs inside a lattice of light. Around it, the Stormheart unfolds.', fx: 'lightning' },
+    { speaker: 'You', pose: 'determined', text: 'There it is. The way home.' },
+    { speaker: 'Narrator', text: 'The pulse quickens. Then settles. The rings around the chamber respond more strongly as the drive approaches resonance.', fx: 'rum' },
+    { speaker: 'Mr Jamnani', pose: 'warning', text: 'It has the whole spire behind it. Phase, reactance and resistance determine how that circuit responds. Look for the pattern in its intentions.' },
+    { speaker: 'You', pose: 'determined', text: 'One more guardian. Then this jungle gets a quiet night.' },
+    { speaker: 'Mr Jamnani', pose: 'neutral', text: 'And you get to write a very strongly worded review of that board game.' }
+  ], endLabel: 'Face the Stormheart' },
+  electricityElite: { useActArena: true, ambient: ['equations'], letterbox: true, studentFrom: 0, lines: [
+    { speaker: 'Narrator', text: 'The last sparks fade from the fallen sentinel. For a moment, you can hear ordinary insects again.' },
+    { speaker: 'You', pose: 'neutral', text: 'Ordinary insects. I missed those.' },
+    { speaker: 'Mr Jamnani', pose: 'explaining', text: 'A hard fight, and a path still ahead. Take what you earned. The regional guardian will not be gentler.' }
+  ], endLabel: 'Return to the circuit' },
+  electricityVictory: { background: 'assets/electricity-cutscene-joule.webp', ambient: ['equations'], letterbox: true, studentFrom: 0, orb: true, lines: [
+    { speaker: 'Narrator', text: 'The Stormheart falls silent. The Hidden Joule of Electricity drifts free of its broken lattice.', fx: 'orb' },
+    { speaker: 'Narrator', text: 'Below, the jungle lamps settle into a warm glow. The endless lightning gives way to rain, then to stars.' },
+    { speaker: 'You', pose: 'neutral', text: 'I can hear the rain without the tower shouting over it.' },
+    { speaker: 'Mr Jamnani', pose: 'neutral', text: 'The network is serving the jungle again. And look—the gate has remembered where you belong.' },
+    { speaker: 'Narrator', text: 'A doorway of blue light opens. Through it: your room, the cupboard, and one extremely innocent-looking board game.' },
+    { speaker: 'You', pose: 'determined', text: 'That is getting a much bigger warning label.' },
+    { speaker: 'Mr Jamnani', pose: 'explaining', text: 'Take the Joule. You came here by accident. You are leaving because you understood what stood in your way.' }
+  ], endLabel: 'Claim the Electricity Joule' },
+  electricityDefeat: { useActArena: true, ambient: ['mist'], letterbox: true, studentFrom: 0, lines: [
+    { speaker: 'Narrator', text: 'The path flickers out beneath you. A blue flash catches you before the dark can.', fx: 'flash' },
+    { speaker: 'Narrator', text: 'You tumble back beside the board game. Somewhere far away, the tower is still humming.' },
+    { speaker: 'You', pose: 'overwhelmed', text: 'So much for the quiet night.' },
+    { speaker: 'Mr Jamnani', pose: 'explaining', text: 'Rest first. The attempt is recorded, and what you learned is yours. The Stormheart can wait for a better-prepared visitor.' }
+  ], endLabel: 'Record the attempt' }
+});
 Object.values(cutscenes).forEach(scene => {
   scene.background = modernAsset(scene.background);
   scene.slot = modernAsset(scene.slot);
 });
 
-const ambientPresets = { equations: ['Φ', 'F = ma', 'kg·m/s', 'ς', 'Σ', 'g = 9.8', 'N·m', 'J', 'λ', 'p = mv'], fireflies: 9, embers: 12, mist: 3 };
+const ambientPresets = { equations: ['Φ', 'F = ma', 'kg·m/s', 'ς', 'Σ', 'g = 9.8', 'N·m', 'J', 'λ', 'p = mv'], electricity: ['V', 'I', 'R', 'ε', 'ΦB', '−dΦ/dt', 'XC', 'XL', 'Z', 'cos φ'], fireflies: 9, embers: 12, mist: 3 };
 
 function ambientHTML(list) {
   if (!list || !list.length) return '';
@@ -551,7 +708,8 @@ function ambientHTML(list) {
     }
   }
   if (list.includes('equations')) {
-    ambientPresets.equations.forEach(glyph => {
+    const glyphs = state?.journey === 'electricity' ? ambientPresets.electricity : ambientPresets.equations;
+    glyphs.forEach(glyph => {
       parts.push(`<i class="amb-glyph" style="--x:${3 + Math.random() * 90}%;--rot:${(Math.random() * 26 - 13).toFixed(0)}deg;--dur:${24 + Math.random() * 20}s;--delay:-${Math.random() * 26}s">${glyph}</i>`);
     });
   }
@@ -574,9 +732,13 @@ function fireFx(name) {
 
 function applyCutsceneArt(root, scene) {
   const paint = url => {
+    if (!url) {
+      root.style.backgroundImage = electricityArena(state?.journey === 'electricity' ? electricitySectionAt(state.act, 0).id : 'I.1');
+      return;
+    }
     root.style.backgroundImage = `linear-gradient(180deg,rgba(4,10,9,.14),rgba(4,10,9,.56)),linear-gradient(90deg,rgba(6,10,10,.55),rgba(6,10,10,.18) 54%,rgba(6,10,10,.28)),url('${url}')`;
   };
-  paint(scene.background);
+  paint(scene.useActArena ? electricityBattleArt(electricitySectionAt(state?.act || 1, 0).id) : scene.background);
   if (!scene.slot) return;
   const probe = new Image();
   probe.onload = () => paint(scene.slot);
@@ -608,6 +770,8 @@ function ownsReward(kind, id) {
 
 function resetState() {
   state = { act: 1, health: 60, maxHealth: 60, coins: 0, insight: 2, current: 'start', available: [], completed: ['start'], encounter: null, activeNode: null, battle: null, drawnQuestion: null, asked: {}, beats: { midpoint: false, elite: false, bossIntro: false }, streak: 0, grudge: 0, charmOwned: false, shopStock: null, shopNode: null, interjected: {}, deck: starterDeck(), artifacts: [], discoveries: [] };
+  normalizeJourneyState(state, selectedJourney);
+  if (state.journey === 'electricity') enterElectricitySection(state, 0);
   nodes = generateMap(state.act);
   const start = nodes.find(node => node.id === 'start');
   state.available = [...start.links];
@@ -664,6 +828,12 @@ function assignBalancedMapKinds(floorGroups, floors) {
     });
     if (floor === treasureFloor) return group.forEach(node => { applyMapKind(node, 'treasure'); node.pressureStreak = 0; });
     if (floor === floors) return group.forEach(node => { applyMapKind(node, 'rest'); node.pressureStreak = 0; });
+    // Regular recovery choices, without granting health automatically. The
+    // midpoint cache and final camp keep their existing dedicated roles.
+    if (floor % 3 === 0) return group.forEach((node, nodeIndex) => {
+      applyMapKind(node, nodeIndex % 2 === 0 ? 'rest' : 'treasure');
+      node.pressureStreak = 0;
+    });
 
     const allowed = ['encounter', 'hazard', 'mystery', 'merchant', 'treasure', 'ruins', ...(floor < floors - 1 ? ['rest'] : []), ...(floor >= eliteFloor ? ['elite'] : [])];
     group.forEach(node => {
@@ -691,7 +861,8 @@ function assignBalancedMapKinds(floorGroups, floors) {
 }
 
 function generateMap(actNumber = 1) {
-  const act = ACTS[Math.min(Math.max(actNumber, 1), ACTS.length) - 1];
+  const acts = state?.journey === 'electricity' ? ELECTRICITY_ACTS : ACTS;
+  const act = acts[Math.min(Math.max(actNumber, 1), acts.length) - 1];
   const floors = act.floors;
   const generated = [{ id: 'start', x: 50, y: 95, floor: 0, label: act.gateLabel, icon: '▲', kind: 'gate', encounter: null, links: [] }];
   const floorGroups = [];
@@ -747,6 +918,27 @@ function generateMap(actNumber = 1) {
     }
   }
   assignBalancedMapKinds(floorGroups, floors);
+  // A recovery icon is useful only if it is reachable from the chosen route.
+  // Preserve existing trails, adding the nearest missing recovery/cache option.
+  floorGroups.forEach((group, index) => {
+    const floor = index + 1;
+    if (floor % 3 !== 0 || floor === floors || floor === Math.ceil(floors / 2)) return;
+    floorGroups[index - 1].forEach(parent => {
+      for (const kind of ['rest', 'treasure']) {
+        if (group.some(node => node.kind === kind && parent.links.includes(node.id))) continue;
+        const nearest = group.filter(node => node.kind === kind)
+          .sort((a, b) => Math.abs(a.x - parent.x) - Math.abs(b.x - parent.x))[0];
+        parent.links.push(nearest.id);
+      }
+    });
+  });
+  if (state?.journey === 'electricity') {
+    generated.forEach(node => {
+      node.sectionId = electricitySectionAt(actNumber, node.floor).id;
+      const presentation = electricityNodePresentation(node);
+      if (presentation) node.label = presentation.label;
+    });
+  }
   return generated;
 }
 
@@ -758,8 +950,8 @@ function renderTitle() {
         <nav class="main-menu" aria-label="Main menu">
           <button class="menu-choice is-selected" id="new-run"><b>Play</b></button>
           <button class="menu-choice" id="how"><b>How to play</b></button>
-          <button class="menu-choice locked-choice" disabled><b>Expedition log</b></button>
           <button class="menu-choice" id="settings"><b>Settings</b></button>
+          <button class="menu-choice" id="updates"><b>Updates</b></button>
         </nav>
         <div class="title-lockup" aria-label="Jamnanji: The Hidden Joules">
           <h1 class="game-title">JAMNANJI</h1>
@@ -769,7 +961,7 @@ function renderTitle() {
           <p>The Hidden Joules</p>
         </div>
       </div>
-      <div class="menu-version">EARLY ACCESS · v0.9.0 · BUILD 0830</div>
+      <div class="menu-version">EARLY ACCESS · v0.9.1 · BUILD 0831</div>
     </section>`;
   const menuItems = [...document.querySelectorAll('.menu-choice:not(:disabled)')];
   let selected = 0;
@@ -788,6 +980,7 @@ function renderTitle() {
   document.querySelector('#new-run').addEventListener('click', renderSaveSlots);
   document.querySelector('#how').addEventListener('click', () => openHudPanel('how', true));
   document.querySelector('#settings').addEventListener('click', () => openHudPanel('settings', true));
+  document.querySelector('#updates').addEventListener('click', () => openHudPanel('updates', true));
 }
 
 function formatSaveTime(timestamp) {
@@ -799,7 +992,7 @@ function confirmClearSave(slotIndex) {
   const previousKeyHandler = document.onkeydown;
   const overlay = document.createElement('div');
   overlay.className = 'save-confirm';
-  overlay.innerHTML = `<button class="save-confirm-shade" aria-label="Cancel"></button><button class="return-tab" id="confirm-return">Return</button><section role="alertdialog" aria-modal="true" aria-labelledby="clear-save-title"><h2 id="clear-save-title">Clear Save ${String(slotIndex + 1).padStart(2, '0')}?</h2><p>This expedition and its map progress will be removed.</p><div><button class="primary" data-confirm>Clear save</button></div></section>`;
+  overlay.innerHTML = `<button class="save-confirm-shade" aria-label="Cancel"></button><button class="return-tab" id="confirm-return">Return</button><section role="alertdialog" aria-modal="true" aria-labelledby="clear-save-title"><h2 id="clear-save-title">Delete Save ${String(slotIndex + 1).padStart(2, '0')}?</h2><p>All stories, active runs, collected Joules and attempt history in this save will be permanently removed.</p><div><button class="primary" data-confirm>Delete save</button></div></section>`;
   document.body.appendChild(overlay);
   const actions = [overlay.querySelector('[data-confirm]')];
   let selected = 0;
@@ -809,7 +1002,7 @@ function confirmClearSave(slotIndex) {
   overlay.querySelector('#confirm-return').addEventListener('click', close);
   overlay.querySelector('[data-confirm]').addEventListener('click', () => {
     const data = loadSaveSlots();
-    data.slots[slotIndex].run = null;
+    data.slots[slotIndex] = SaveProgress.emptySlot(slotIndex);
     writeSaveSlots(data);
     close();
     renderSaveSlots();
@@ -837,12 +1030,16 @@ function renderSaveSlots() {
     <main class="save-slot-grid">${data.slots.map((slot, index) => {
       const run = slot.run;
       const runState = run?.state;
-      const act = run ? ACTS[Math.min(Math.max(runState.act || 1, 1), ACTS.length) - 1] : null;
+      const savedActs = (runState?.journey || run?.journey) === 'electricity' ? ELECTRICITY_ACTS : ACTS;
+      const act = run ? savedActs[Math.min(Math.max(runState.act || 1, 1), savedActs.length) - 1] : null;
       const level = run ? run.nodes.find(node => node.id === runState.current)?.floor || 0 : 0;
       const journey = run ? journeys.find(item => item.id === run.journey) || journeys[0] : null;
       const encounters = run ? Math.max(0, (runState.completed?.length || 1) - 1) : 0;
-      return `<div class="save-slot-wrap"><article class="save-slot ${run ? 'has-run' : 'is-empty'} ${index === currentSaveSlot ? 'is-current' : ''}" data-save-slot="${index}" role="button" tabindex="${index === currentSaveSlot ? '0' : '-1'}" aria-label="Select Save ${index + 1}, ${run ? 'expedition in progress' : 'empty'}">
+      const exists = !!slot.createdAt;
+      const joules = SaveProgress.collected(slot).length;
+      return `<div class="save-slot-wrap"><article class="save-slot ${exists ? 'has-run' : 'is-empty'} ${index === currentSaveSlot ? 'is-current' : ''}" data-save-slot="${index}" role="button" tabindex="${index === currentSaveSlot ? '0' : '-1'}" aria-label="Select Save ${index + 1}, ${exists ? `${joules} of 3 Joules collected` : 'empty'}">
         <div class="save-slot-number"><span>Save</span><b>${String(index + 1).padStart(2, '0')}</b></div>
+        ${exists ? `<p class="save-journey-progress">${joules === 3 ? 'Journey complete' : `${joules} / 3 Joules collected`}</p>` : ''}
         ${run ? `<ul class="save-details">
           <li><span>Act</span><strong>${act.numeral} · ${act.name}</strong></li>
           <li><span>Level</span><strong>${level}</strong></li>
@@ -850,17 +1047,23 @@ function renderSaveSlots() {
           <li><span>Stability</span><strong>${runState.health}/${runState.maxHealth}</strong></li>
           <li><span>Encounters</span><strong>${encounters}</strong></li>
           <li><span>Last logged</span><strong>${formatSaveTime(run.savedAt)}</strong></li>
-        </ul>` : '<p class="save-slot-empty">Empty slot</p>'}
-      </article>${run ? `<button class="save-slot-clear" data-clear-slot="${index}">Clear save</button>` : ''}</div>`;
+        </ul>` : exists ? `<ul class="save-details"><li><span>Attempts</span><strong>${slot.runs}</strong></li><li><span>Completed</span><strong>${slot.victories}</strong></li><li><span>Last logged</span><strong>${formatSaveTime(slot.updatedAt)}</strong></li></ul>` : '<p class="save-slot-empty">Empty slot</p>'}
+      </article>${exists ? `<button class="save-slot-clear" data-clear-slot="${index}">Delete save</button>` : ''}</div>`;
     }).join('')}</main>
     <button class="journey-embark save-slot-continue" id="save-continue"></button>
   </section>`;
   const cards = [...document.querySelectorAll('[data-save-slot]')];
+  const clearButtons = [...document.querySelectorAll('[data-clear-slot]')];
   const continueButton = document.querySelector('#save-continue');
   let selected = Math.max(0, Math.min(2, currentSaveSlot));
   const renderSelection = index => {
     cards.forEach((card, cardIndex) => card.classList.toggle('is-selected', cardIndex === index));
-    continueButton.textContent = data.slots[index].run ? 'Continue run' : 'Start new run';
+    clearButtons.forEach(button => {
+      const isSelected = Number(button.dataset.clearSlot) === index;
+      button.disabled = !isSelected;
+      button.setAttribute('aria-hidden', String(!isSelected));
+    });
+    continueButton.textContent = data.slots[index].createdAt ? 'Choose story' : 'Create save';
   };
   const updateSelection = index => {
     selected = (index + cards.length) % cards.length;
@@ -868,13 +1071,15 @@ function renderSaveSlots() {
     renderSelection(selected);
     cards[selected].focus();
   };
-  const openSelected = () => data.slots[selected].run ? continueSavedRun(selected) : startNewRun(selected);
+  const openSelected = () => startNewRun(selected);
   document.querySelector('#save-return').addEventListener('click', renderTitle);
   cards.forEach((card, index) => {
     card.addEventListener('click', () => updateSelection(index));
   });
   continueButton.addEventListener('click', openSelected);
-  document.querySelectorAll('[data-clear-slot]').forEach(button => button.addEventListener('click', () => confirmClearSave(Number(button.dataset.clearSlot))));
+  clearButtons.forEach(button => button.addEventListener('click', () => {
+    if (Number(button.dataset.clearSlot) === selected) confirmClearSave(selected);
+  }));
   document.onkeydown = event => {
     if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) { event.preventDefault(); updateSelection(selected + (event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1)); }
     if (event.key === 'Enter' && !document.activeElement?.matches('#save-return, #save-continue, [data-clear-slot]')) openSelected();
@@ -884,19 +1089,35 @@ function renderSaveSlots() {
 }
 
 function renderJourneySelect() {
+  if (currentSaveSlot < 0) return renderSaveSlots();
+  const slot = loadSaveSlots().slots[currentSaveSlot];
+  const joules = SaveProgress.collected(slot);
+  const active = SaveProgress.activeJourneys(slot);
+  const statusFor = journey => {
+    const story = slot.stories[journey.id];
+    const access = JourneyAccess.forJourney(journey, slot, location.hostname);
+    if (story.run) return 'Run in progress';
+    if (story.jouleCollected) return 'Joule collected';
+    if (!access.ready) return 'Coming soon';
+    if (access.blockedByRun) return 'Another run active';
+    return 'Available';
+  };
   let selectedIndex = Math.max(0, journeys.findIndex(journey => journey.id === selectedJourney));
   app.innerHTML = `<section class="screen journey-screen journey-mechanics">
     <div class="journey-shade"></div>
     <button class="journey-back" id="journey-back">Return</button>
     <div class="journey-details">
+      ${active.length ? `<p class="profile-progress">Active: ${active.map(id => journeys.find(j => j.id === id).name).join(', ')}. Finish or discard before starting another mode.</p><button id="discard-active-run">Discard active run${active.length > 1 ? 's' : ''}</button>` : ''}
+      <p class="profile-progress">Save ${String(currentSaveSlot + 1).padStart(2, '0')} · ${joules.length}/3 Joules${joules.length === 3 ? ' · Journey complete' : ''}</p>
       <h1 id="journey-name"></h1>
       <p class="journey-act" id="journey-act"></p>
       <p class="journey-description" id="journey-description"></p>
       <div class="journey-focus"><span>Expedition focus</span><b id="journey-focus"></b></div>
       <p class="journey-objective" id="journey-objective"></p>
+      <details class="story-history" id="story-history"><summary>Attempt history</summary><ol id="story-attempts"></ol></details>
     </div>
     <div class="journey-monument" aria-hidden="true"><span id="journey-monument-sigil">Φ</span><i></i></div>
-    <nav class="journey-seals" aria-label="Journeys">${journeys.map((journey, index) => `<button class="journey-seal" data-journey-index="${index}" aria-label="${journey.name}, ${journey.status}"><span>${journey.sigil}</span><b>${journey.name}</b><small>${journey.status}</small></button>`).join('')}</nav>
+    <nav class="journey-seals" aria-label="Stories">${journeys.map((journey, index) => `<button class="journey-seal${slot.stories[journey.id].jouleCollected ? ' has-joule' : ''}" data-journey-index="${index}" aria-label="${journey.name}, ${statusFor(journey)}"><span>${journey.sigil}</span><b>${journey.name}</b><small>${statusFor(journey)}</small></button>`).join('')}</nav>
     <button class="journey-embark" id="journey-embark">Embark</button>
   </section>`;
 
@@ -912,33 +1133,66 @@ function renderJourneySelect() {
     document.querySelector('#journey-act').textContent = journey.act;
     document.querySelector('#journey-description').textContent = journey.description;
     document.querySelector('#journey-focus').textContent = journey.focus;
-    document.querySelector('#journey-objective').textContent = journey.objective;
+    const story = slot.stories[journey.id];
+    const access = JourneyAccess.forJourney(journey, slot, location.hostname);
+    document.querySelector('#journey-objective').textContent = !access.ready ? 'This mode is not built yet. No other story completion is required.' : access.blockedByRun ? 'Finish your active run, or discard it to start this mode. Collected Joules and history are kept.' : story.jouleCollected ? `Joule of ${journey.name} collected. Replays keep your Joule.` : journey.objective;
+    const history = document.querySelector('#story-history');
+    history.open = false;
+    history.querySelector('summary').textContent = `Attempt history · ${story.attempts.length}`;
+    document.querySelector('#story-attempts').innerHTML = story.attempts.length ? [...story.attempts].reverse().map(attempt => `<li><strong>${attempt.outcome === 'won' ? 'Joule recovered' : attempt.outcome === 'abandoned' ? 'Run discarded' : 'Run failed'}</strong><span>Act ${attempt.act} · Level ${attempt.floor} · ${attempt.health}/${attempt.maxHealth} Stability</span><time>${formatSaveTime(attempt.endedAt)}</time></li>`).join('') : '<li>No completed attempts yet.</li>';
     document.querySelector('#journey-monument-sigil').textContent = journey.sigil;
-    seals.forEach((seal, sealIndex) => seal.classList.toggle('is-selected', sealIndex === selectedIndex));
-    embark.disabled = !journey.available;
-    embark.textContent = journey.available ? 'Begin journey' : 'Journey sealed';
+    seals.forEach((seal, sealIndex) => { seal.classList.toggle('is-selected', sealIndex === selectedIndex); seal.setAttribute('aria-pressed', String(sealIndex === selectedIndex)); });
+    embark.disabled = !access.playable;
+    embark.textContent = !access.ready ? 'Coming soon' : access.blockedByRun ? 'Another run active' : story.run ? 'Continue run' : 'Start new run';
+  };
+  const enterStory = () => {
+    const journey = journeys[selectedIndex];
+    if (!JourneyAccess.forJourney(journey, slot, location.hostname).playable) return;
+    if (slot.stories[journey.id].run) return continueSavedRun(currentSaveSlot, journey.id);
+    if (journey.id === 'mechanics') playCutscene('prologue', beginExpedition);
+    else if (journey.id === 'electricity') playCutscene('electricityPrologue', beginExpedition);
+    else beginExpedition();
   };
   seals.forEach((seal, index) => seal.addEventListener('click', () => updateSelection(index)));
-  document.querySelector('#journey-back').addEventListener('click', renderTitle);
-  embark.addEventListener('click', () => { if (journeys[selectedIndex].available) playCutscene('prologue', beginExpedition); });
+  document.querySelector('#journey-back').addEventListener('click', renderSaveSlots);
+  embark.addEventListener('click', enterStory);
+  document.querySelector('#discard-active-run')?.addEventListener('click', () => {
+    if (!window.confirm('Discard the active run on this save? Run progress will be lost. Collected Joules and attempt history will be kept.')) return;
+    const data = loadSaveSlots();
+    SaveProgress.discardRuns(data.slots[currentSaveSlot]);
+    writeSaveSlots(data);
+    if (state) state.runEnded = true;
+    renderJourneySelect();
+  });
   document.onkeydown = event => {
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); updateSelection(selectedIndex + (event.key === 'ArrowRight' ? 1 : -1)); }
-    if (event.key === 'Enter' && journeys[selectedIndex].available) playCutscene('prologue', beginExpedition);
-    if (event.key === 'Escape') renderTitle();
+    if (event.key === 'Enter' && !document.activeElement?.matches('#journey-back, #journey-embark, summary')) { event.preventDefault(); enterStory(); }
+    if (event.key === 'Escape') renderSaveSlots();
   };
   updateSelection(selectedIndex);
 }
 
 function beginExpedition() {
+  if (currentSaveSlot >= 0) {
+    const slot = loadSaveSlots().slots[currentSaveSlot];
+    const journey = journeys.find(item => item.id === selectedJourney);
+    if (!journey || !JourneyAccess.forJourney(journey, slot, location.hostname).playable || SaveProgress.activeJourneys(slot).length) return renderJourneySelect();
+  }
   clearInterval(cutsceneTimer);
   document.onkeydown = null;
   resetState();
+  if (currentSaveSlot >= 0) {
+    const data = loadSaveSlots();
+    data.slots[currentSaveSlot].runs += 1;
+    writeSaveSlots(data);
+  }
   saveRun();
   renderMap();
 }
 
 function playCutscene(id, onDone) {
   const scene = cutscenes[id];
+  warmImages([scene.slot || scene.background, ...scene.lines.filter(line => line.speaker === 'You' || line.speaker === 'Mr Jamnani').map(line => line.speaker === 'You' ? `assets/student-${line.pose || 'neutral'}-v3-cutout.webp` : `assets/jamnani-${line.pose || 'neutral'}-cutout.webp`)]);
   clearInterval(cutsceneTimer);
   document.onkeydown = null;
   let index = 0;
@@ -1071,10 +1325,18 @@ function playCutscene(id, onDone) {
   typeLine(scene.lines[index]);
 }
 
+function locationLabel(node) {
+  return (state.journey === 'electricity' && node ? electricityNodePresentation(node)?.label : null) || node?.label || currentAct().gateLabel;
+}
+
+function hudLocation() {
+  return locationLabel(nodes.find(item => item.id === (state.activeNode || state.current)));
+}
+
 function hud() {
-  const location = nodes.find(node => node.id === state.current)?.label || ACTS[(state.act || 1) - 1].gateLabel;
+  const location = hudLocation();
   return `<header class="hud">
-    <div class="player-id"><div><strong data-hud-location>${location}</strong><small>Mechanics · ${ACTS[(state.act || 1) - 1].numeral}</small></div></div>
+    <div class="player-id"><div><strong data-hud-location>${location}</strong><small>${state.journey === 'electricity' ? 'Electricity' : 'Mechanics'} · ${currentAct().numeral}</small></div></div>
     <div class="hud-stat health-stat" aria-label="Stability: ${state.health} of ${state.maxHealth}" data-resource-label="Stability"><svg class="hud-art-icon heart-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21S3 15.5 3 8.8C3 5.7 5.1 3.5 8 3.5c1.8 0 3.2.9 4 2.3 0.8-1.4 2.2-2.3 4-2.3 2.9 0 5 2.2 5 5.3C21 15.5 12 21 12 21Z"/></svg><b data-hud-health>${state.health}<i>/${state.maxHealth}</i></b></div>
     <div class="hud-stat hud-supplies" aria-label="Supplies: ${state.coins}" data-resource-label="Supplies"><svg class="hud-art-icon supplies-icon" viewBox="0 0 24 24" aria-hidden="true"><ellipse class="icon-dark" cx="12" cy="18.2" rx="7.5" ry="3.1"/><path class="coin-back" d="M5.3 11.7v5.7c0 1.7 3 3.1 6.7 3.1s6.7-1.4 6.7-3.1v-5.7Z"/><circle class="coin-face" cx="12" cy="10.1" r="6.8"/><circle class="coin-ring" cx="12" cy="10.1" r="4.3"/><path class="coin-mark" d="M12 6.8v6.6M9.9 8.3h3.2c1.7 0 1.7 2.2 0 2.2h-2.2c-1.7 0-1.7 2.2 0 2.2h3.2"/><path class="icon-glint" d="m7.7 5.8 1.1 1.1"/></svg><b data-hud-supplies>${state.coins}</b></div>
     <div class="hud-stat hud-insight" aria-label="Insight: ${state.insight}" data-resource-label="Insight"><svg class="hud-art-icon insight-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 15.1c-1.4-1.1-2.3-2.8-2.3-4.8A6.1 6.1 0 0 1 12 4.2a6.1 6.1 0 0 1 6.1 6.1c0 2-.9 3.7-2.3 4.8-.8.6-1.1 1.2-1.2 2H9.4c-.1-.8-.4-1.4-1.2-2Z"/><path d="M9.5 19h5M10.4 21h3.2M12 1.5v1M4.3 4l1.2 1.2M19.7 4l-1.2 1.2M2 10.3h1.7M20.3 10.3H22"/></svg><b data-hud-insight>${state.insight}</b></div>
@@ -1085,11 +1347,36 @@ function hud() {
   </header>`;
 }
 
-function closeHudPanel() {
+// Battle time excludes time spent in Settings/Notes. Timers from an exited
+// battle are abandoned rather than firing against a different encounter.
+function battleTimeout(callback, delay) {
+  const battle = state?.battle;
+  let remaining = delay;
+  let previous = performance.now();
+  const tick = () => {
+    if (state?.battle !== battle) return;
+    const now = performance.now();
+    const paused = Boolean(document.querySelector('.hud-overlay'));
+    if (!paused) remaining -= now - previous;
+    previous = now;
+    if (!paused && remaining <= 0) callback();
+    else setTimeout(tick, 16);
+  };
+  setTimeout(tick, Math.min(delay, 16));
+}
+
+function closeHudPanel(resumeQuestion = true) {
   const overlay = document.querySelector('.hud-overlay');
   if (!overlay) return;
   document.removeEventListener('keydown', overlay._escapeHandler, true);
   overlay.remove();
+  app.inert = false;
+  document.body.classList.remove('hud-panel-open');
+  const question = document.querySelector('#battle-question-overlay');
+  if (question) question.inert = false;
+  overlay._pausedAnimations?.forEach(animation => { if (animation.playState === 'paused') animation.play(); });
+  if (resumeQuestion && overlay._returnFocus?.isConnected) overlay._returnFocus.focus();
+  if (resumeQuestion && overlay._pendingQuestionBattle === state?.battle && state?.battle?.phase === 'question' && !state.battle.won) mountQuestionModal();
 }
 
 function confirmBattleExit(settingsOverlay) {
@@ -1114,6 +1401,8 @@ function confirmBattleExit(settingsOverlay) {
     state.locationSession = null;
     state.pendingCompletion = false;
     saveRun();
+    document.querySelector('#battle-question-overlay')?.remove();
+    document.querySelectorAll('.card-play-ghost,.card-discard-ghost').forEach(ghost => ghost.remove());
     closeHudPanel();
     renderMap();
   };
@@ -1130,11 +1419,133 @@ function confirmBattleExit(settingsOverlay) {
   confirmation.querySelector('[data-exit-no]').focus();
 }
 
-function openHudPanel(kind, fromMenu = false) {
-  closeHudPanel();
+function curriculumEscape(value) {
+  return String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+}
+
+function questionDiagramHTML(question) {
+  const figure = question?.diagram;
+  if (!figure || !/^assets\/questions\/[a-z-]+\.svg$/.test(figure.src)) return '';
+  return `<figure class="question-diagram"><img src="${figure.src}" alt="${curriculumEscape(figure.alt)}"></figure>`;
+}
+
+function studySections() {
+  return state.journey === 'electricity' ? ELECTRICITY_SECTIONS
+    : MECHANICS_SECTIONS;
+}
+
+function currentStudyOrder() {
+  if (state.journey === 'electricity') return state.electricity?.sections?.[state.act] || 1;
+  return mechanicsSectionAt(state.act, nodes.find(node => node.id === (state.activeNode || state.current))?.floor || 0).order;
+}
+
+function studyNotebookHTML() {
+  const order = currentStudyOrder();
+  return `<div class="curriculum-notebook"><h3>${state.journey === 'electricity' ? 'Electricity' : 'Mechanics'} field guide</h3>${studySections().filter(section =>
+    section.act < state.act || (section.act === state.act && section.order <= order)
+  ).map(section => `<details><summary>${section.id} · ${section.name}</summary><p>${curriculumEscape(section.intro)}</p>${[
+    ['Key principle', section.principle], ['Check the conditions', section.conditions], ['Misconception to catch', section.misconception], ['Explain to yourself', section.prompt]
+  ].filter(([, text]) => text).map(([label, text]) => `<p><strong>${label}:</strong> ${curriculumEscape(text)}</p>`).join('')}</details>`).join('')}</div>`;
+}
+
+function mapLearningProgressHTML() {
+  const order = currentStudyOrder();
+  return `<details class="map-learning-progress"><summary>Learning progress</summary><div class="curriculum-map-sections"><h3>${currentAct().name}</h3>${studySections().filter(section => section.act === state.act).map(section => `<p><strong>${section.id} · ${section.name}</strong><small>Floors ${section.from}–${section.to}${section.order === order ? ' · Current' : section.order < order ? ' · Completed' : ' · Ahead'}</small></p>`).join('')}</div></details>`;
+}
+
+
+const MECHANICS_BRIEFINGS = [
+  { id: 'I', name: 'Momentum and Centre of Mass',
+    intro: 'The canopy is full of collisions and shifting loads. Track the motion of the whole system, not just one object: momentum can move between objects while the total stays constant.',
+    principle: 'Total momentum is conserved when the net external impulse is zero. The centre of mass moves according to the net external force on the system.',
+    conditions: 'Choose a system and a positive direction. Treat momentum as a vector. Kinetic energy is conserved in an elastic collision, but not in every collision.',
+    misconception: 'Equal and opposite interaction forces act on different objects. They do not cancel on a single object. A longer stopping time reduces average force for the same momentum change.' },
+  { id: 'II', name: 'Rotation and Angular Momentum',
+    intro: 'Beyond the canopy, heavy mechanisms turn on hidden axles. Where mass sits matters as much as how much there is. Explain what changes the rotation, and what can remain conserved.',
+    principle: 'Net torque changes angular momentum. With constant rotational inertia, net torque equals rotational inertia times angular acceleration.',
+    conditions: 'Angular momentum is conserved about a chosen axis when net external torque about that axis is zero. Rotational inertia depends on the mass distribution about that axis.',
+    misconception: 'Conserved angular momentum does not require constant angular speed or rotational kinetic energy. Pulling mass inward can increase angular speed, with internal work changing kinetic energy.' },
+  { id: 'III', name: 'Circular Motion, Orbits and Oscillations',
+    intro: 'Curving paths and swinging chambers guard the final Joule. Look for the direction of the resultant force: towards the centre of a circle, or back towards an oscillation’s equilibrium position.',
+    principle: 'Circular motion needs an inward resultant force. Simple harmonic motion requires acceleration proportional to displacement and directed towards equilibrium.',
+    conditions: 'Gravity supplies the centripetal force in a circular orbit. The simple pendulum model assumes small angles. Resonance occurs near a system’s natural frequency under periodic driving; damping limits the response.',
+    misconception: 'Centripetal force is not an extra force. In SHM, speed is greatest at equilibrium while acceleration is zero; at a turning point, speed is zero while acceleration magnitude is greatest.' }
+];
+
+// Existing artwork and move sets, paced across thirds of each act.
+const MECHANICS_SECTIONS = [
+  [1, 1, 'The Vector Trail', ['frog', 'baboon', 'sloth'], 'Baboons and dart frogs patrol the outer trail. Watch the sloth wind up: a quiet turn is a chance to prepare, not a promise of safety.'],
+  [1, 2, 'The Tension Ravine', ['frog', 'parrot', 'spider', 'orangutan'], 'Parrots and pulley spiders gather above the ravine. Choose targets carefully: steady attacks, alternating strikes and stolen supplies create different priorities.'],
+  [1, 3, 'The Collision Clearing', ['frog', 'viper', 'boar'], 'Boars hold the clearing while vipers grow more dangerous with each exchange. Decide when blocking buys time and when ending a fight prevents more damage.'],
+  [2, 1, 'The Rotor Grove', ['frog', 'rotor', 'turtle'], 'Rotor monkeys circle the grove beneath armoured turtles. Read the defensive turns before committing your attacks.'],
+  [2, 2, 'The Rolling Quarry', ['frog', 'beaver', 'boulder'], 'Rolling boulders gather momentum while angular beavers raid your supplies. Use the wind-up turns to deal with the immediate threats.'],
+  [2, 3, 'The Flywheel Heights', ['frog', 'falcon', 'flywheel'], 'Falcons sweep above the flywheels. The lemurs become stronger as the fight continues, making target order increasingly important.'],
+  [3, 1, 'The Curved Approach', ['mosquito', 'comet', 'panther'], 'Panthers guard the curved approach and comet newts prepare sudden bursts. Read the combined incoming damage before choosing your defence.'],
+  [3, 2, 'The Orbital Watch', ['mosquito', 'falcon', 'owl'], 'Orbital owls alternate between guarding and striking while falcons patrol overhead. Find an opening without ignoring the rest of the pack.'],
+  [3, 3, 'The Harmonic Summit', ['mosquito', 'comet', 'howler', 'ape'], 'Howlers and harmonic apes guard the summit. Escalating attacks and heavy alternating blows reward careful timing before the final guardian.']
+].map(([act, order, name, mobs, intro]) => {
+  const base = MECHANICS_BRIEFINGS[act - 1];
+  const length = ACTS[act - 1].floors / 3;
+  return { ...base, id: `${base.id}.${order}`, act, order, from: (order - 1) * length + 1, to: order * length, name, mobs, intro };
+});
+
+function mechanicsSectionAt(act, floor) {
+  const sections = MECHANICS_SECTIONS.filter(section => section.act === (act || 1));
+  return sections.find(section => floor <= section.to) || sections[sections.length - 1];
+}
+
+function encounterBriefing(node) {
+  return state.journey === 'electricity'
+    ? electricitySectionAt(state.act, node.floor)
+    : mechanicsSectionAt(state.act, node.floor);
+}
+
+function showSectionIntroduction(section, continueEncounter) {
   const overlay = document.createElement('div');
+  overlay.id = 'section-introduction';
+  overlay.className = 'battle-question-overlay is-visible';
+  overlay.innerHTML = `<section class="battle-question-modal section-introduction" role="dialog" aria-modal="true" aria-labelledby="section-intro-title"><small>Section ${curriculumEscape(section.id)}</small><h2 id="section-intro-title">${curriculumEscape(section.name)}</h2><div class="section-introduction-content"><p>${curriculumEscape(section.intro)}</p><details><summary>Open section notes</summary><p>${curriculumEscape(section.principle)}</p><p>${curriculumEscape(section.conditions)}</p><p><strong>Watch for:</strong> ${curriculumEscape(section.misconception)}</p></details></div><footer class="section-introduction-actions"><button class="answer-btn" data-section-continue>Continue</button></footer></section>`;
+  document.body.appendChild(overlay);
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    state.seenBriefings ||= {};
+    state.seenBriefings[`${state.journey}:${section.id}`] = true;
+    document.removeEventListener('keydown', onKey, true);
+    overlay.remove();
+    saveRun();
+    continueEncounter();
+  };
+  const onKey = event => {
+    if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); finish(); }
+    if (event.key === 'Tab') {
+      const items = [...overlay.querySelectorAll('summary,button')];
+      const first = items[0], last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+  };
+  document.addEventListener('keydown', onKey, true);
+  overlay.querySelectorAll('button').forEach(button => button.addEventListener('click', finish, { once: true }));
+  overlay.querySelector('[data-section-continue]').focus();
+}
+
+function updatesHistoryHTML() {
+  return `<div class="updates-history" tabindex="0" aria-label="Game update history"><p class="updates-intro">Features, improvements, and fixes from the development record. Dates describe milestones, not necessarily public deployment.</p>${GAME_UPDATES.map(entry => `<article class="update-entry">${entry.date ? `<time datetime="${entry.date}">${curriculumEscape(entry.label)}</time>` : `<p class="update-date">${curriculumEscape(entry.label)}</p>`}<h3>${curriculumEscape(entry.title)}</h3><ul>${entry.items.map(item => `<li>${curriculumEscape(item)}</li>`).join('')}</ul></article>`).join('')}</div>`;
+}
+
+function openHudPanel(kind, fromMenu = false) {
+  const returnFocus = document.querySelector('.hud-overlay')?._returnFocus || document.activeElement;
+  const pendingQuestionBattle = document.querySelector('.hud-overlay')?._pendingQuestionBattle;
+  closeHudPanel(false);
+  const overlay = document.createElement('div');
+  overlay._returnFocus = returnFocus;
+  overlay._pendingQuestionBattle = pendingQuestionBattle;
   overlay.className = `hud-overlay${fromMenu ? ' menu-hud-overlay' : ''}${kind === 'notes' ? ' notes-hud-overlay' : ''}`;
   const isNotes = kind === 'notes';
+  const isUpdates = kind === 'updates';
+  if (isUpdates) overlay.classList.add('updates-hud-overlay');
   const isHow = kind === 'how';
   const isSettings = kind === 'settings';
   const isRunSettings = isSettings && !fromMenu;
@@ -1144,25 +1555,37 @@ function openHudPanel(kind, fromMenu = false) {
   const deckList = Object.entries(deckCounts).map(([key, count]) => { const upgraded = key.endsWith('+'); const def = cardDef(key.replace(/\+$/, '')); const cost = def ? cardEnergyCost({ id: def.id, upgraded }) : 0; return def ? `<article class="field-note-page card-type-${def.type}">${count > 1 ? `<span class="field-note-count">${count} copies</span>` : ''}<span class="field-note-cost"><small>Cost:</small> ${energyCostMarks(cost)}</span><h3>${def.name}${upgraded ? '+' : ''}</h3><small class="field-note-type">${def.type}</small><p>${upgraded ? def.up : def.text}</p><b>${def.topic || 'Any topic'}</b></article>` : ''; }).join('');
   const runRewards = [...(state?.artifacts || []).map(id => rewardDefinition('artifact', id)), ...(state?.discoveries || []).map(id => rewardDefinition('discovery', id))].filter(Boolean);
   const rewardNotes = runRewards.map(item => `<article class="field-reward-note"><span>${item.mark}</span><div><b>${item.name}</b><small>${item.text}</small></div></article>`).join('');
-  const panelBody = isNotes ? `<div class="field-notes-summary">${state?.deck?.length || 0} notes collected</div>${rewardNotes ? `<div class="field-reward-notes">${rewardNotes}</div>` : ''}<div class="field-notes-grid">${deckList || '<p class="field-notes-empty">No notes collected yet.</p>'}</div>` : isHow ? `<div class="how-grid">
+  const panelBody = isNotes ? `<div class="field-notes-summary">${state?.deck?.length || 0} cards collected</div>${rewardNotes ? `<div class="field-reward-notes">${rewardNotes}</div>` : ''}<div class="field-notes-grid">${deckList || '<p class="field-notes-empty">No cards collected yet.</p>'}</div>` : isHow ? `<div class="how-grid">
           <article><span>01</span><div><h3>Choose a route</h3><p>Select one connected landmark. The path closes behind you, so plan around danger, rest and rewards.</p></div></article>
-          <article><span>02</span><div><h3>Answer to act</h3><p>Correct physics answers attack enemies and solve hazards. Wrong answers cost Stability.</p></div></article>
+          <article><span>02</span><div><h3>Answer to act</h3><p>Answer the question, then play cards within your Energy budget. Wrong battle answers reduce Energy; enemy attacks and hazards can cost Stability.</p></div></article>
           <article><span>03</span><div><h3>Prepare wisely</h3><p>Collect Supplies, gain Insight and use safe landmarks before taking on Elite encounters.</p></div></article>
-          <article><span>04</span><div><h3>Recover the Joule</h3><p>Reach the final guardian and survive its trial to complete the Mechanics expedition.</p></div></article>
+          <article><span>04</span><div><h3>Recover the Joule</h3><p>Defeat each act’s guardian and complete all three acts to recover your subject’s Joule.</p></div></article>
         </div><div class="how-controls"><kbd>↑ ↓ ← →</kbd><span>Navigate</span><kbd>Enter</kbd><span>Select</span><kbd>Esc</kbd><span>Return</span></div>` : `<div class="settings-list">
           <fieldset><legend>Dialogue speed</legend><div class="setting-options">${[['Quick',8],['Standard',16],['Relaxed',28]].map(([label,value]) => `<button class="setting-choice ${preferences.textSpeed === value ? 'is-active' : ''}" data-setting-speed="${value}">${label}</button>`).join('')}</div></fieldset>
           <label class="setting-toggle"><span><b>Reduced motion</b></span><input type="checkbox" data-setting-motion ${preferences.reducedMotion ? 'checked' : ''}></label>
           <fieldset><legend>Interface size</legend><div class="setting-options">${[['Compact', 90], ['Standard', 100], ['Large', 110]].map(([label, value]) => `<button class="setting-choice ${preferences.interfaceSize === value ? 'is-active' : ''}" data-setting-size="${value}">${label}</button>`).join('')}</div></fieldset>
         </div><button class="settings-reset" data-settings-reset>Restore defaults</button>`;
   overlay.innerHTML = `<button class="hud-modal-backdrop" aria-label="Close panel"></button>
-    <button class="return-tab${isSettings ? ' save-close-tab' : ''}" id="hud-return">${isSettings ? 'Save and close' : 'Return'}</button>
+    <button class="return-tab${isSettings ? ' save-close-tab' : ''}" id="hud-return">${isSettings ? 'Save and close' : isNotes ? 'Close notes' : 'Return'}</button>
     ${canExitBattle ? '<button class="settings-exit-battle" id="settings-exit-battle">Exit battle</button>' : ''}
     <section class="hud-modal" role="dialog" aria-modal="true" aria-labelledby="hud-modal-title">
-      <header><div><h2 id="hud-modal-title">${isNotes ? 'Field Notes' : isHow ? 'How to Play' : 'Settings'}</h2></div></header>
-      ${panelBody}
+      <header><div><h2 id="hud-modal-title">${isUpdates ? 'Updates' : isNotes ? 'Field Notes' : isHow ? 'How to Play' : 'Settings'}</h2></div></header>
+      ${isUpdates ? updatesHistoryHTML() : isNotes ? `<nav class="field-notes-switcher" aria-label="Field Notes views"><button type="button" data-notes-view="cards" aria-controls="notes-cards" aria-pressed="true">Cards</button><button type="button" data-notes-view="study" aria-controls="notes-study" aria-pressed="false">Study notes</button></nav><div id="notes-cards">${panelBody}</div><div id="notes-study" hidden>${studyNotebookHTML()}</div>` : panelBody}
     </section>`;
   document.body.appendChild(overlay);
+  overlay.querySelectorAll('[data-notes-view]').forEach(button => button.addEventListener('click', () => {
+    overlay.querySelectorAll('[data-notes-view]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+    overlay.querySelector('#notes-cards').hidden = button.dataset.notesView !== 'cards';
+    overlay.querySelector('#notes-study').hidden = button.dataset.notesView !== 'study';
+  }));
   overlay.querySelector('.hud-modal-backdrop').addEventListener('click', closeHudPanel);
+  app.inert = true;
+  document.body.classList.add('hud-panel-open');
+  const question = document.querySelector('#battle-question-overlay');
+  if (question) question.inert = true;
+  overlay._pausedAnimations = document.getAnimations().filter(animation =>
+    animation.playState === 'running' && !overlay.contains(animation.effect?.target));
+  overlay._pausedAnimations.forEach(animation => animation.pause());
   overlay.querySelector('#hud-return').addEventListener('click', () => {
     if (isSettings) savePreferences();
     closeHudPanel();
@@ -1177,7 +1600,7 @@ function openHudPanel(kind, fromMenu = false) {
     preferences.interfaceSize = Number(button.dataset.settingSize); savePreferences();
     overlay.querySelectorAll('[data-setting-size]').forEach(item => item.classList.toggle('is-active', item === button));
   }));
-  overlay.querySelector('[data-settings-reset]')?.addEventListener('click', () => { preferences = { ...preferenceDefaults }; savePreferences(); closeHudPanel(); openHudPanel('settings', fromMenu); });
+  overlay.querySelector('[data-settings-reset]')?.addEventListener('click', () => { preferences = { ...preferenceDefaults }; savePreferences(); openHudPanel('settings', fromMenu); });
   overlay._escapeHandler = event => { if (overlay._confirming) return; event.stopImmediatePropagation(); if (event.key === 'Escape') { event.preventDefault(); closeHudPanel(); } };
   document.addEventListener('keydown', overlay._escapeHandler, true);
   overlay.querySelector('#hud-return').focus();
@@ -1195,7 +1618,7 @@ function refreshHud() {
   if (supplies) supplies.textContent = state.coins;
   if (insight) insight.textContent = state.insight;
   const locationEl = document.querySelector('[data-hud-location]');
-  if (locationEl) locationEl.textContent = nodes.find(node => node.id === state.current)?.label || locationEl.textContent;
+  if (locationEl) locationEl.textContent = hudLocation();
   const battleHealth = document.querySelector('[data-battle-player-health]');
   if (battleHealth) battleHealth.textContent = `${state.health}/${state.maxHealth}`;
   const battleHealthBar = document.querySelector('[data-battle-player-bar]');
@@ -1215,23 +1638,30 @@ function refreshHud() {
 
 function renderMap() {
   document.onkeydown = null;
+  warmMapAssets();
   app.innerHTML = `<section class="screen game-shell">${hud()}
     <div class="map-layout">
       <section class="panel map-panel">
-        <div class="map-viewport"><div class="map" id="map"></div></div>
+        <div class="map-viewport" aria-label="Expedition map. Scroll to review the trail." tabindex="0"><div class="map" id="map"></div></div>
+        <div class="map-scroll-hint" aria-hidden="true">Scroll to review the trail</div>
       </section>
       <aside class="panel guide-panel map-key">
         <div class="scroll-cap" aria-hidden="true"></div>
+        <div class="map-key-content" tabindex="0" aria-label="Map key and current position">
         <h2>Map key</h2>
         <div class="legend landmark-legend">
           <p><b>${mapIcon('encounter')}</b> Encounter</p><p><b>${mapIcon('hazard')}</b> Dangerous ground</p><p><b>${mapIcon('mystery')}</b> Unknown</p><p><b>${mapIcon('rest')}</b> Rest</p><p><b>${mapIcon('merchant')}</b> Merchant</p><p><b>${mapIcon('treasure')}</b> Treasure</p><p><b>${mapIcon('elite')}</b> Elite</p><p><b>${mapIcon('ruins')}</b> Ruins</p><p><b>${mapIcon('joule')}</b> Joule guardian</p>
         </div>
-        <div class="route-readout"><span>Current position</span><strong>${nodes.find(n => n.id === state.current).label}</strong></div>
+        <div class="route-readout"><span>Current position</span><strong>${locationLabel(nodes.find(n => n.id === state.current))}</strong></div>
+        ${mapLearningProgressHTML()}
+        </div>
       </aside>
     </div>
     <button class="return-tab" id="return-menu">Return</button>
   </section>`;
-  document.querySelector('#return-menu').addEventListener('click', renderTitle);
+  document.querySelector('#return-menu').addEventListener('click', () => {
+    if (!document.querySelector('.hud-overlay')) renderTitle();
+  });
   drawMap();
   wireHudControls();
 }
@@ -1245,8 +1675,9 @@ function drawMap() {
       const target = nodes.find(n => n.id === targetId);
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', `M ${node.x} ${node.y} L ${target.x} ${target.y}`);
-      const travelled = state.completed.includes(node.id) && (state.completed.includes(targetId) || state.available.includes(targetId));
-      path.setAttribute('class', travelled ? 'route route-live' : 'route');
+      const travelled = state.completed.includes(node.id) && state.completed.includes(targetId);
+      const nextTrail = node.id === state.current && state.available.includes(targetId);
+      path.setAttribute('class', travelled ? 'route route-live' : nextTrail ? 'route route-next' : 'route');
       svg.appendChild(path);
     });
   });
@@ -1254,25 +1685,40 @@ function drawMap() {
   nodes.forEach(node => {
     const button = document.createElement('button');
     const status = state.completed.includes(node.id) ? 'completed' : state.available.includes(node.id) ? 'available' : 'locked';
-    button.className = `node node-${node.kind} ${status} ${node.id === 'boss' ? 'boss' : ''}`;
+    button.className = `node node-${node.kind} ${status} ${node.id === state.current ? 'is-current' : ''} ${node.id === 'boss' ? 'boss' : ''}`;
     button.style.left = `${node.x}%`; button.style.top = `${node.y}%`;
     button.disabled = status !== 'available';
-    button.innerHTML = `<span class="landmark-symbol">${mapIcon(node.kind)}</span><span class="node-label">${node.label}</span><span class="node-status">${status === 'available' ? 'Choose trail' : status === 'completed' ? 'Cleared' : 'Unexplored'}</span>`;
-    button.setAttribute('aria-label', `${node.label}, ${status}`);
-    if (status === 'available') button.addEventListener('click', () => startEncounter(node.id));
+    button.innerHTML = `<span class="landmark-symbol">${mapIcon(node.kind)}</span><span class="node-label">${curriculumEscape(locationLabel(node))}</span><span class="node-status">${status === 'available' ? 'Choose trail' : status === 'completed' ? 'Cleared' : 'Unexplored'}</span>`;
+    button.setAttribute('aria-label', `${locationLabel(node)}, ${status}`);
+    if (status === 'available') {
+      let opening = false;
+      const openLocation = () => {
+        if (opening) return;
+        opening = true;
+        startEncounter(node.id);
+      };
+      // Native click can be delayed or suppressed directly after a scroll.
+      // Pointer release opens immediately; click remains for keyboard input.
+      button.addEventListener('pointerup', event => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        openLocation();
+      });
+      button.addEventListener('click', openLocation);
+    }
     map.appendChild(button);
   });
   const currentNode = nodes.find(node => node.id === state.current);
-  const mapHeight = map.offsetHeight;
-  const viewportHeight = map.parentElement.clientHeight;
-  const desiredShift = viewportHeight * .68 - (currentNode.y / 100) * mapHeight;
-  const shift = Math.max(viewportHeight - mapHeight, Math.min(0, desiredShift));
-  map.style.transform = `translateY(${shift}px)`;
+  const viewport = map.parentElement;
+  requestAnimationFrame(() => {
+    const currentY = (currentNode.y / 100) * map.offsetHeight;
+    viewport.scrollTop = Math.max(0, currentY - viewport.clientHeight * .62);
+  });
 }
 
 function battleAnswerButtons(question, battle) {
   const eliminated = battle.hint?.round === battle.round ? battle.hint.eliminated : [];
-  const locked = battle.phase !== 'question'; // answers exist only in question mode
+  const locked = battle.phase !== 'question' || battle.answering;
   return question.answers.map((answer, index) => `<button class="answer-btn${eliminated.includes(index) ? ' is-eliminated' : ''}" data-battle-answer="${index}"${eliminated.includes(index) || locked ? ' disabled' : ''}>${answer}</button>`).join('');
 }
 
@@ -1296,7 +1742,7 @@ function ensureIconDefs() {
 function cardEnergyCost(instance) {
   const def = cardDef(instance?.id);
   if (!def) return Infinity;
-  if (instance.upgraded && def.id === 'resonance') return 1;
+  if (instance.upgraded && def.effect.k === 'resonance') return 1;
   if (instance.upgraded && def.id === 'inertia') return 0;
   return def.cost;
 }
@@ -1316,12 +1762,12 @@ function cardActionPreview(instance, battle) {
   const effect = def.effect;
   const upgraded = instance.upgraded;
   const amount = (normal, improved = effect.up) => upgraded && improved != null ? improved : normal;
-  if (['block', 'potential', 'block_draw'].includes(effect.k)) return { kind: 'block', amount: amount(effect.n) };
+  if (['block', 'potential', 'block_draw', 'grounded'].includes(effect.k)) return { kind: 'block', amount: amount(effect.n) };
   if (effect.k === 'damage_block') return { kind: 'attack', amount: amount(effect.n) };
   if (effect.k === 'multi') return { kind: 'attack', amount: amount(effect.n) * amount(effect.hits, effect.upHits) };
   if (effect.k === 'thirdlaw') return { kind: 'attack', amount: Math.max(0, (battle.lastTaken || 0) + (upgraded ? effect.up : 0)) };
   if (effect.k === 'conserve') return { kind: 'attack', amount: battle.block || 0 };
-  if (['damage', 'sweep', 'insight', 'torque', 'pendulum', 'damage_draw', 'damage_weak', 'execute'].includes(effect.k)) return { kind: 'attack', amount: amount(effect.n) };
+  if (['damage', 'sweep', 'insight', 'torque', 'pendulum', 'damage_draw', 'damage_weak', 'execute', 'electrocuted'].includes(effect.k)) return { kind: 'attack', amount: amount(effect.n) };
   return null;
 }
 
@@ -1414,7 +1860,7 @@ function cardModeHTML(battle) {
   const hand = battle.hand.map((instance, index) => {
     const def = cardDef(instance.id);
     const cost = cardEnergyCost(instance);
-    return cardTile(instance, { index, playable: battle.energy >= cost, attr: `data-hand-card="${index}" aria-label="${def.name}, cost ${cost}. ${def.target === 'enemy' ? 'Drag onto an enemy to attack.' : 'Drag onto your explorer to play.'}` });
+    return cardTile(instance, { index, playable: battle.phase === 'cards' && battle.energy >= cost, attr: `data-hand-card="${index}" aria-label="${def.name}, cost ${cost}. ${def.target === 'enemy' ? 'Drag onto an enemy to attack.' : 'Drag onto your explorer to play.'}` });
   }).join('');
   return `<div class="battle-card-ui" id="battle-tray-body" data-mode="cards">
     <div class="hand-dock"><div class="hand-row" id="hand-row" aria-label="Card hand">${hand || '<span class="hand-empty">No cards remain in hand.</span>'}</div></div>
@@ -1423,7 +1869,7 @@ function cardModeHTML(battle) {
       <button type="button" class="pile-chip pile-draw" data-pile-view="draw" title="View cards remaining in draw pile" aria-label="View draw pile, ${battle.drawPile.length} cards"><i aria-hidden="true">▱</i><b>${battle.drawPile.length}</b><small>Draw</small></button>
     </div>
     <button type="button" class="battle-discard-pile" id="battle-discard-pile" data-pile-view="discard" title="View discarded cards" aria-label="View discard pile, ${battle.discardPile.length} cards"><i aria-hidden="true">▰</i><b>${battle.discardPile.length}</b><small>Discard</small></button>
-    <button type="button" class="commit-btn" id="commit-turn">End turn</button>
+    <button type="button" class="commit-btn" id="commit-turn"${battle.phase === 'cards' ? '' : ' disabled'}>End turn</button>
     <span class="sr-only" id="queue-announcer" aria-live="polite"></span>
   </div>`;
 }
@@ -1432,14 +1878,16 @@ function cardModeHTML(battle) {
 // exchange's plays, then the modal clears and the card phase begins.
 function battleQuestionModalHTML(battle) {
   const question = battle.questions[battle.round];
-  if (!question) return '';
+  if (!question) return `<div class="battle-question-overlay" id="battle-question-overlay" role="dialog" aria-modal="true" aria-labelledby="battle-modal-question"><section class="battle-question-modal"><h2 id="battle-modal-question">Eligible question pool completed</h2><p>No unseen questions are available for this encounter. Later sections and reserved boss questions stay protected. Continue without a question penalty; no questions will repeat.</p><div class="battle-question-actions"><button type="button" class="answer-btn" id="question-pool-continue">Continue</button></div></section></div>`;
   return `<div class="battle-question-overlay" id="battle-question-overlay" role="dialog" aria-modal="true" aria-labelledby="battle-modal-question">
     <section class="battle-question-modal">
       <small class="battle-question-kicker">Exchange ${battle.round + 1} · answer to charge your play</small>
       <h2 id="battle-modal-question">${question.question}</h2>
+      ${questionDiagramHTML(question)}
       <div class="answers battle-answers" id="battle-answers">${battleAnswerButtons(question, battle)}<button type="button" class="hint-btn insight-action" id="battle-hint"></button></div>
       <span class="streak-chip hidden" data-battle-streak></span>
       <p class="battle-question-verdict hidden" id="battle-question-verdict" aria-live="polite"></p>
+      <div class="battle-question-actions hidden" id="battle-question-actions"></div>
     </section>
   </div>`;
 }
@@ -1455,19 +1903,28 @@ function announceBattleStart(kind) {
   const text = lines[kind] || 'Let the battle begin!';
   stage.insertAdjacentHTML('beforeend', `<div class="battle-start-banner" id="battle-start-banner"><span>${text}</span></div>`);
   const banner = document.getElementById('battle-start-banner');
-  setTimeout(() => banner?.classList.add('is-leaving'), 2050);
-  setTimeout(() => banner?.remove(), 2550);
+  battleTimeout(() => banner?.classList.add('is-leaving'), 2050);
+  battleTimeout(() => banner?.remove(), 2550);
 }
 
 function mountQuestionModal() {
   const battle = hydrateUnits(state.battle);
   if (!battle || battle.phase !== 'question') return;
+  const menu = document.querySelector('.hud-overlay');
+  if (menu) {
+    menu._pendingQuestionBattle = battle;
+    return;
+  }
   ensureRoundQuestion(battle);
   document.querySelector('#battle-question-overlay')?.remove();
   const stage = document.querySelector('.location-stage');
-  if (!stage || !battle.questions[battle.round]) return;
+  if (!stage) return;
   document.body.insertAdjacentHTML('beforeend', battleQuestionModalHTML(battle));
+  document.querySelector('#question-pool-continue')?.addEventListener('click', () => dismissQuestionModal(() => beginCardPhase(battle)), { once: true });
   const overlay = document.querySelector('#battle-question-overlay');
+  // The HUD stays available outside this dialog; only the battlefield is blocked.
+  overlay.removeAttribute('aria-modal');
+  stage.inert = true;
   const accent = getComputedStyle(stage).getPropertyValue('--location-accent');
   if (accent) overlay.style.setProperty('--location-accent', accent);
   requestAnimationFrame(() => requestAnimationFrame(() => overlay?.classList.add('is-visible')));
@@ -1475,6 +1932,7 @@ function mountQuestionModal() {
   wireBattleAnswers();
   wireBattleHint();
   updateHintButton();
+  if (battle.answerFeedback) showBattleAnswerFeedback(battle);
   refreshHud();
 }
 
@@ -1482,8 +1940,14 @@ function dismissQuestionModal(then) {
   const overlay = document.querySelector('#battle-question-overlay');
   if (!overlay) return then?.();
   overlay.classList.add('is-leaving');
-  if (preferences.reducedMotion) { overlay.remove(); then?.(); }
-  else setTimeout(() => { overlay.remove(); then?.(); }, 230);
+  const finish = () => {
+    overlay.remove();
+    const stage = document.querySelector('.location-stage');
+    if (stage) stage.inert = false;
+    then?.();
+  };
+  if (preferences.reducedMotion) finish();
+  else battleTimeout(finish, 230);
 }
 
 function ensureRoundQuestion(battle) {
@@ -1503,6 +1967,7 @@ function beginCardPhase(battle) {
 }
 
 function settleBattleVictory(battle) {
+  if (battle !== state.battle || battle.won) return;
   const reward = battle.reward ?? encounters[state.encounter].reward;
   state.coins += reward;
   battle.won = true;
@@ -1705,6 +2170,7 @@ function startTurn(battle) {
   battle.resonating = false;
   battle.roundMultiplier = 1;
   battle.answering = false;
+  battle.answerFeedback = null;
   battle.phase = 'question';
   // Delayed strikes land as the swing comes back around.
   const pendulum = battle.pendulumQueue.shift();
@@ -1724,8 +2190,11 @@ function dealToEnemy(battle, index, damage) {
   const unit = battle.units[index];
   if (!unit || unit.hp <= 0) return 0;
   if (unit.shield) { unit.shield = false; return 0; }
-  unit.hp = Math.max(0, unit.hp - damage);
-  return damage;
+  const bonus = battle.charged || 0;
+  battle.charged = 0;
+  const total = damage + bonus;
+  unit.hp = Math.max(0, unit.hp - total);
+  return total;
 }
 
 async function playCard(index, targetIndex) {
@@ -1745,6 +2214,7 @@ async function playCard(index, targetIndex) {
     if (!(target >= 0)) return;
   }
   battle.hand.splice(index, 1);
+  battle.phase = 'playing';
   battle.energy = Math.max(0, battle.energy - cost);
   // Snapshot the card as a ghost before the hand re-renders, so the flight
   // starts exactly where the card was while the remaining hand refreshes.
@@ -1763,8 +2233,10 @@ async function playCard(index, targetIndex) {
   }
   rerenderTrayBody();
   await animateCardPlay(ghost, cardResolutionTarget(def, battle, target));
+  if (state.battle !== battle) return;
   applyCardEffect(instance, battle.roundMultiplier, target);
   battle.discardPile.push(instance);
+  battle.phase = 'cards';
   updateEnemyPack();
   if (battle.units.every(unit => unit.hp <= 0)) return settleBattleVictory(battle);
   rerenderTrayBody();
@@ -1792,6 +2264,7 @@ async function commitTurn() {
   commitButton?.classList.add('is-hidden');
   // The hand visibly sweeps into the discard pile before enemies move.
   await animateDiscardHand();
+  if (state.battle !== battle) return;
   battle.discardPile.push(...battle.hand);
   battle.hand = [];
   const count = document.querySelector('#battle-discard-pile b');
@@ -1817,7 +2290,7 @@ function animateDiscardHand() {
       ghost.style.left = `${rect.left}px`;
       ghost.style.top = `${rect.top}px`;
       document.body.appendChild(ghost);
-      setTimeout(() => {
+      battleTimeout(() => {
         ghost.style.setProperty('--play-x', `${targetRect.left + targetRect.width / 2 - rect.left - rect.width / 2}px`);
         ghost.style.setProperty('--play-y', `${targetRect.top + targetRect.height / 2 - rect.top - rect.height / 2}px`);
         ghost.classList.add('is-flying');
@@ -1825,9 +2298,9 @@ function animateDiscardHand() {
         void target.offsetWidth;
         target.classList.add('is-receiving');
       }, 40 + index * 70);
-      setTimeout(() => ghost.remove(), 480 + index * 70);
+      battleTimeout(() => ghost.remove(), 480 + index * 70);
     });
-    setTimeout(resolve, 560 + cards.length * 70);
+    battleTimeout(resolve, 560 + cards.length * 70);
   });
 }
 
@@ -1872,8 +2345,31 @@ function shopStockFor(node) {
   }).filter(Boolean);
 }
 
+function electricityLocationActivity(node) {
+  const place = electricityNodePresentation(node);
+  const act = state.act || 1;
+  if (node.kind === 'hazard') {
+    const challenge = ELECTRICITY_HAZARDS[act];
+    return `<div class="activity-heading hazard-heading"><span class="activity-sigil" aria-hidden="true">ϟ</span><div><small>Read the route controller</small><h2>${place.title}</h2><p>${challenge.prompt}</p><small>Fictional control puzzle—not real-world electrical safety guidance.</small></div></div><div class="location-options hazard-options">${challenge.choices.map((choice, index) => `<button data-location-action="hazard-${index}"><b>${choice[0]}</b><span>${choice[1]}</span></button>`).join('')}</div>`;
+  }
+  if (node.kind === 'ruins') {
+    const session = state.locationSession || { phase: 0 };
+    const stages = ELECTRICITY_CONTROL_STAGES[act];
+    const stage = stages[Math.min(session.phase, stages.length - 1)];
+    return `<div class="activity-heading ruins-heading"><span class="activity-sigil" aria-hidden="true">⌬</span><div><small>${place.title} · stage ${session.phase + 1} of ${stages.length}</small><h2>${stage.title}</h2><p>${stage.prompt}</p></div></div><div class="ruin-machine" aria-label="Control array progress">${stages.map((_, index) => `<i class="${index < session.phase ? 'is-set' : index === session.phase ? 'is-live' : ''}">${index + 1}</i>`).join('<span></span>')}</div><div class="location-options ruins-options">${stage.choices.map((choice, index) => `<button data-location-action="ruin-${index}"><b>${choice}</b></button>`).join('')}</div>`;
+  }
+  if (node.kind === 'rest') return `<div class="activity-heading"><div><h2>${place.title} · service stop</h2></div></div><div class="location-options camp-options"><button data-location-action="recover"><b>Repair expedition equipment</b><span>Recover ${actRestRecovery()} Stability</span></button><button data-location-action="prepare"><b>Review the ${['circuit', 'induction', 'AC'][act - 1]} records</b><span>Gain 1 Insight</span></button><button data-location-action="sharpen"><b>Calibrate a card</b><span>Upgrade one card in your deck</span></button><button data-location-action="leave"><b>Continue along the circuit</b><span>Take nothing · lose nothing</span></button></div>`;
+  if (node.kind === 'merchant') {
+    const stock = shopStockFor(node).map(item => ({ ...item, ...ELECTRICITY_SHOP_ITEMS[item.id] }));
+    return `<div class="activity-heading"><div><h2>${place.title} · component exchange</h2><span class="shop-note">Tools, instruments and circuit techniques.</span></div></div><div class="location-options shop-options">${stock.map(item => `<button data-location-action="buy-${item.id}"${state.coins < shopPrice(item) ? ' class="is-unaffordable"' : ''}><b>${item.name}</b><span>${shopPrice(item)} Supplies · ${item.note}</span></button>`).join('')}<button data-location-action="trade"><b>Exchange one recorded Insight</b><span>Receive 20 Supplies</span></button><button data-location-action="leave"><b>Close the component case</b><span>Continue without buying</span></button></div>`;
+  }
+  if (node.kind === 'treasure') return `<div class="activity-heading"><div><h2>${place.title} · choose one compartment</h2></div></div><div class="location-options treasure-options cache-options"><button data-location-action="cache-supplies"><span class="cache-mark" aria-hidden="true">◉</span><b>Component reserve</b><span>Gain 38 Supplies</span></button><button data-location-action="cache-relic"><span class="cache-mark" aria-hidden="true">✦</span><b>Instrument compartment</b><span>${state.charmOwned ? 'Gain 2 Insight' : 'Gain 5 maximum Stability'}</span></button><button data-location-action="cache-card"><span class="cache-mark" aria-hidden="true">▱</span><b>Technique archive</b><span>Add a rare card to your deck</span></button></div>`;
+  if (node.kind === 'mystery') return `<div class="activity-heading"><div><h2>${place.title} · dormant terminal</h2></div></div><div class="location-options mystery-options"><button data-location-action="offering"><b>Run a powered diagnostic</b><span>Spend 10 Supplies · uncertain return · possible 4 Stability loss</span></button><button data-location-action="symbols"><b>Read the ${['circuit traces', 'generator records', 'signal traces'][act - 1]}</b><span>Recover Insight, Supplies, or both</span></button><button data-location-action="leave"><b>Leave the terminal idle</b><span>No cost · no risk</span></button></div>`;
+  return '';
+}
 function locationActivity(node, encounter) {
   if (state.battle) return battleTray(node, encounter);
+  if (state.journey === 'electricity' && !['encounter', 'elite', 'joule'].includes(node.kind)) return electricityLocationActivity(node);
   if (node.kind === 'hazard') {
     const challenge = hazardChallenges[node.encounter] || hazardChallenges.river;
     return `<div class="activity-heading hazard-heading"><span class="activity-sigil" aria-hidden="true">ϟ</span><div><small>Choose your movement</small><h2>${challenge.prompt}</h2></div></div>
@@ -1926,14 +2422,23 @@ function locationActivity(node, encounter) {
       <button data-location-action="leave"><b>Back away slowly</b><span>Jamnani calls this “risk management”</span></button>
     </div>`;
 
-  return `<div class="activity-heading"><div><h2>${encounter.question}</h2></div></div>
+  return `<div class="activity-heading"><div><h2>${encounter.question}</h2></div></div>${questionDiagramHTML(encounter)}
     <div class="answers">${encounter.answers.map((answer, index) => `<button class="answer-btn" data-answer="${index}">${answer}</button>`).join('')}</div>`;
 }
 
 // Questions are drawn at random from the AS91524 theory bank. Numerical
 // substitution exercises are deliberately excluded: Jamnanji rehearses the
 // written explanations, comparisons, derivations, and proofs used in the exam.
-function currentAct() { return ACTS[Math.min(Math.max(state?.act || 1, 1), ACTS.length) - 1]; }
+function currentAct() {
+  const acts = state?.journey === 'electricity' ? ELECTRICITY_ACTS : ACTS;
+  return acts[Math.min(Math.max(state?.act || 1, 1), acts.length) - 1];
+}
+
+function encounterForNode(node) {
+  const base = encounters[node.encounter];
+  if (state?.journey !== 'electricity') return base;
+  return { ...base, ...electricityNodePresentation(node) };
+}
 function actRestRecovery() { return [16, 20, 24][Math.min(Math.max(state?.act || 1, 1), 3) - 1]; }
 
 function levelsForNode(node) {
@@ -1942,25 +2447,14 @@ function levelsForNode(node) {
 }
 
 function shuffleQuestion(entry) {
-  const options = entry.answers.map((answer, index) => ({ answer, correct: index === entry.correct })).sort(() => Math.random() - .5);
-  return { question: entry.q, answers: options.map(option => option.answer), correct: options.findIndex(option => option.correct), topic: entry.topic, level: entry.level, strand: entry.strand };
-}
-
-function answerLengthTier(question) {
-  const correctLength = question.answers[question.correct].length;
-  const distractorLengths = question.answers
-    .filter((_, index) => index !== question.correct)
-    .map(answer => answer.length);
-  const longestDistractor = Math.max(...distractorLengths);
-
-  // Prefer questions where length is not a useful clue. Small differences are
-  // accepted because exact character matching would make the prose unnatural.
-  if (correctLength <= longestDistractor || correctLength / longestDistractor <= 1.25) return 0;
-  if (correctLength / longestDistractor <= 1.5) return 1;
-  return 2;
+  const options = entry.answers.map((answer, index) => ({ answer, correct: index === entry.correct, random: Math.random() })).sort((a, b) => a.random - b.random);
+  return { id: entry.id, question: entry.q, answers: options.map(option => option.answer), correct: options.findIndex(option => option.correct), topic: entry.topic, level: entry.level, strand: entry.strand, explanation: entry.explanation, sourceIds: entry.sourceIds, diagram: entry.diagram, journey: entry.journey, sectionId: entry.journey === 'electricity' ? ELECTRICITY_HOME_SECTION.get(entry.id) : undefined };
 }
 
 function pickQuestions(topics, count, levels = [1, 2, 3]) {
+  if (state?.journey === 'electricity') {
+    return drawElectricityQuestions(state, count, levels, state.activeNode === 'boss').map(shuffleQuestion);
+  }
   const act = currentAct();
   const themed = topics?.filter(topic => act.topics.includes(topic));
   const topicList = themed?.length ? themed : act.topics;
@@ -1969,10 +2463,10 @@ function pickQuestions(topics, count, levels = [1, 2, 3]) {
     q.theory && topicList.includes(q.topic) && levels.includes(q.level) && !asked[q.id]
   );
   const pool = eligible
-    .map(question => ({ question, tier: answerLengthTier(question), random: Math.random() }))
-    .sort((a, b) => a.tier - b.tier || a.random - b.random)
+    .map(question => ({ question, random: Math.random() }))
+    .sort((a, b) => a.random - b.random)
     .slice(0, count);
-  pool.forEach(({ question }) => { if (state) state.asked[question.id] = true; });
+  pool.forEach(({ question }) => { if (state) { state.asked ||= {}; state.asked[question.id] = true; } });
   return pool.map(({ question }) => shuffleQuestion(question));
 }
 
@@ -2040,7 +2534,8 @@ const BATTLE_BALANCE_VERSION = 2;
 function currentBossDefinition() {
   const boss = currentAct().boss;
   const balance = ACT_BOSS_BALANCE[Math.min(Math.max(state.act || 1, 1), ACT_BOSS_BALANCE.length) - 1];
-  return { id: 'boss', name: boss.name, mark: boss.mark, shape: 'hex', hue: 45, hp: balance.hp, bounty: 0, moves: { k: 'cycle', hits: balance.hits }, art: modernAsset(boss.art), scale: boss.scale };
+  const electricityBoss = state?.journey === 'electricity';
+  return { id: 'boss', name: boss.name, mark: boss.mark, shape: 'hex', hue: electricityBoss ? 186 : 45, hp: balance.hp, bounty: 0, moves: { k: 'cycle', hits: balance.hits }, art: modernAsset(boss.art), scale: boss.scale };
 }
 
 // Pure: the intent a unit telegraphs this round, derived from its move set and phase.
@@ -2068,7 +2563,7 @@ function intentLabel(intent) {
 function hydrateUnits(battle) {
   battle.units.forEach((unit, index) => {
     if (battle.kind === 'joule' && index === 0) unit.id = 'boss';
-    const canonical = ENEMY_ROSTER[unit.id] || ACT_ELITES[unit.id] || (unit.id === 'boss' ? currentBossDefinition() : null);
+    const canonical = ENEMY_ROSTER[unit.id] || ACT_ELITES[unit.id] || ELECTRICITY_ENEMIES[unit.id] || (unit.id === 'boss' ? currentBossDefinition() : null);
     if (canonical && (unit.def?.hp !== canonical.hp || unit.maxHp !== canonical.hp)) {
       const ratio = unit.maxHp > 0 ? unit.hp / unit.maxHp : 1;
       unit.def = canonical;
@@ -2094,11 +2589,14 @@ function hydrateUnits(battle) {
   if (typeof battle.maxEnergy !== 'number') battle.maxEnergy = 3;
   if (typeof battle.phase !== 'string') battle.phase = 'cards';
   if (typeof battle.damping !== 'number') battle.damping = 0;
+  if (typeof battle.dampingTurns !== 'number') battle.dampingTurns = battle.damping > 0 ? Math.max(1, battle.damping - 1) : 0;
   if (typeof battle.retainBlock !== 'boolean') battle.retainBlock = false;
   if (typeof battle.resonating !== 'boolean') battle.resonating = false;
   if (typeof battle.lastTaken !== 'number') battle.lastTaken = 0;
   if (typeof battle.nextTurnEnergy !== 'number') battle.nextTurnEnergy = 0;
-  battle.units.forEach(unit => { if (!unit.weak) unit.weak = null; });
+  if (typeof battle.charged !== 'number') battle.charged = 0;
+  if (typeof battle.grounded !== 'number') battle.grounded = 0;
+  battle.units.forEach(unit => { if (!unit.weak) unit.weak = null; if (typeof unit.electrocuted !== 'number') unit.electrocuted = 0; });
   return battle;
 }
 
@@ -2118,8 +2616,10 @@ const COMPOSITIONS = [
 ];
 
 function fillCompositionSlot(role, pool) {
-  const fallback = { swarm: ENEMY_ROSTER.frog, soldier: ENEMY_ROSTER.baboon, heavy: ENEMY_ROSTER.boar }[role];
-  const candidates = pool.mobs.map(id => ENEMY_ROSTER[id]).filter(def => def.role === role);
+  const fallback = state?.journey === 'electricity'
+    ? { swarm: ELECTRICITY_ENEMIES.branchBeetle, soldier: ELECTRICITY_ENEMIES.relayHornet, heavy: ELECTRICITY_ENEMIES.copperback }[role]
+    : { swarm: ENEMY_ROSTER.frog, soldier: ENEMY_ROSTER.baboon, heavy: ENEMY_ROSTER.boar }[role];
+  const candidates = pool.mobs.map(id => ENEMY_ROSTER[id] || ELECTRICITY_ENEMIES[id]).filter(def => def.role === role);
   const pick = () => sample(candidates.length ? candidates : [fallback]);
   if (role === 'swarm') {
     const def = pick();
@@ -2130,14 +2630,20 @@ function fillCompositionSlot(role, pool) {
 }
 
 function buildPack(node) {
-  const pool = ACT_POOLS[Math.min(Math.max(state.act || 1, 1), ACT_POOLS.length) - 1];
+  const mechanicsSection = state?.journey === 'electricity' ? null : mechanicsSectionAt(state.act, node.floor);
+  const pool = state?.journey === 'electricity'
+    ? ELECTRICITY_POOLS[node.sectionId || electricitySectionAt(state.act, node.floor).id]
+    : { ...ACT_POOLS[Math.min(Math.max(state.act || 1, 1), ACT_POOLS.length) - 1], mobs: mechanicsSection.mobs, cheap: mechanicsSection.mobs.filter(id => ENEMY_ROSTER[id].role !== 'heavy') };
   if (node.kind === 'joule') {
     const boss = currentAct().boss;
     return { units: [spawnUnit(currentBossDefinition())], reward: encounters[boss.encounter].reward };
   }
   if (node.kind === 'elite') {
-    const units = [spawnUnit(ACT_ELITES[pool.elite]), spawnUnit(ENEMY_ROSTER[sample(pool.cheap)])];
-    return { units, reward: ACT_ELITES[pool.elite].bounty };
+    const elite = state?.journey === 'electricity' ? ELECTRICITY_ENEMIES[pool.elite || 'relayWarden'] : ACT_ELITES[pool.elite];
+    const supportId = sample(pool.cheap);
+    const support = ENEMY_ROSTER[supportId] || ELECTRICITY_ENEMIES[supportId];
+    const units = [spawnUnit(elite), spawnUnit(support)];
+    return { units, reward: elite.bounty };
   }
   const tier = [...COMPOSITIONS].reverse().find(entry => node.floor >= entry.minFloor) || COMPOSITIONS[0];
   const units = sample(tier.packs).flatMap(role => fillCompositionSlot(role, pool));
@@ -2179,7 +2685,7 @@ function battleActors() {
       : `<span class="unit-glyph shape-${unit.def.shape || 'blob'}" style="--unit-hue:${unit.def.hue ?? 40}" aria-hidden="true">${unit.def.mark}</span>`;
     return `<button type="button" class="enemy-unit ${unit.def.art ? 'enemy-art-unit' : 'enemy-glyph-unit'}${swarm > 1 ? ' enemy-swarm-unit' : ''}${defeated ? ' is-defeated' : ''}${unit.shield ? ' is-shielded' : ''}${unit.def.hover && !defeated ? ' is-hovering' : ''}" style="--enemy-scale:${unit.def.scale || 1};--hover:${unit.def.hover || 0}px" data-enemy="${index}"${defeated ? ' disabled' : ''} aria-label="${name}, ${unit.hp} of ${unit.maxHp} health">
       <span class="unit-art${swarm > 1 ? ' swarm-art' : ''}">${art}<span class="intent-pip is-${intent.kind}" aria-hidden="true">${intentLabel(intent)}</span></span>
-      <b>${name}</b>
+      <b>${name}</b><span class="combat-status enemy-electrocuted${unit.electrocuted ? '' : ' hidden'}" title="Electrocuted — guaranteed damage after this enemy acts">ϟ <b>${unit.electrocuted || 0}</b></span>
       <span class="hp-wrap"><span class="block-badge enemy-shield-badge${unit.shield && !defeated ? '' : ' hidden'}" title="Shielded — absorbs the next hit">${SHIELD_SVG}</span><span class="enemy-health"><i style="width:${unit.hp / unit.maxHp * 100}%"></i><small>${unit.hp}/${unit.maxHp}</small></span></span>
     </button>`;
   }).join('');
@@ -2207,9 +2713,17 @@ function refreshLocationPanel(node = nodes.find(item => item.id === state.active
 
 function startEncounter(id, resume = false) {
   document.onkeydown = null;
+  const entryNode = nodes.find(item => item.id === id);
+  if (state.journey === 'electricity') {
+    enterElectricitySection(state, entryNode.floor);
+  }
+  const briefing = encounterBriefing(entryNode);
+  if (!resume && briefing && !state.seenBriefings?.[`${state.journey}:${briefing.id}`]) {
+    return showSectionIntroduction(briefing, () => startEncounter(id, resume));
+  }
   if (id === 'boss' && !state.beats.bossIntro) {
     state.beats.bossIntro = true;
-    const bossScene = state.act === 1 ? 'bossIntro' : `bossIntro${state.act}`;
+    const bossScene = state.journey === 'electricity' ? `electricityBoss${state.act}` : state.act === 1 ? 'bossIntro' : `bossIntro${state.act}`;
     return playCutscene(bossScene, () => startEncounter(id, resume));
   }
   const node = nodes.find(item => item.id === id);
@@ -2219,11 +2733,11 @@ function startEncounter(id, resume = false) {
   if (!resume) state.battle = createBattle(node, node.encounter);
   else if (state.health <= 0) return renderEnd(false);
   else normalizeBattle(state.battle, encounters[node.encounter], node);
-  let e = encounters[node.encounter];
-  if (!state.battle) {
+  let e = encounterForNode(node);
+  if (!state.battle && !journalKinds.includes(node.kind)) {
     // Keep one act-appropriate question ready for any journal event that uses the shared quiz fallback.
-    state.drawnQuestion = pickQuestions(ENCOUNTER_TOPICS[node.encounter] || null, 1, levelsForNode(node))[0];
-    e = { ...e, question: state.drawnQuestion.question, answers: state.drawnQuestion.answers, correct: state.drawnQuestion.correct };
+    if (!resume || !state.drawnQuestion) state.drawnQuestion = pickQuestions(ENCOUNTER_TOPICS[node.encounter] || null, 1, levelsForNode(node))[0];
+    e = state.drawnQuestion ? { ...e, ...state.drawnQuestion } : { ...e, question: 'Eligible question pool completed', answers: [] };
   }
   saveRun();
   const journal = journalKinds.includes(node.kind);
@@ -2242,9 +2756,17 @@ function startEncounter(id, resume = false) {
   if (['encounter', 'elite', 'joule'].includes(node.kind)) {
     const scene = document.querySelector('.location-stage>.scene');
     const arena = battleArt[Math.min(Math.max(state.act, 1), battleArt.length) - 1];
-    if (scene && arena) scene.style.backgroundImage = `url('${arena}')`;
+    if (scene && state.journey === 'electricity') {
+      scene.style.backgroundImage = electricityArena(node.sectionId);
+      const electricityArt = electricityBattleArt(node.sectionId);
+      const probe = new Image();
+      probe.onload = () => { scene.style.backgroundImage = `url('${electricityArt}')`; };
+      probe.src = electricityArt;
+    }
+    else if (scene && arena) scene.style.backgroundImage = `url('${arena}')`;
   }
   document.querySelectorAll('[data-answer]').forEach(btn => btn.addEventListener('click', () => resolveAnswer(Number(btn.dataset.answer))));
+  if (!state.battle && !journalKinds.includes(node.kind) && !e.answers.length) showEncounterContinue();
   document.querySelectorAll('[data-location-action]').forEach(btn => btn.addEventListener('click', () => resolveLocationAction(btn.dataset.locationAction)));
   wireBattleAnswers();
   wireCardMode();
@@ -2254,17 +2776,18 @@ function startEncounter(id, resume = false) {
   updateIncomingPreview();
   updateHintButton();
   if (state.battle?.won) showBattleRewards(state.battle);
-  else if (resume) mountQuestionModal();
+  else if (resume && state.battle?.phase === 'awaiting-next') showBattleNext(state.battle);
+  else if (resume && state.battle) mountQuestionModal();
   else {
     announceBattleStart(node.kind);
     if (preferences.reducedMotion) mountQuestionModal();
-    else setTimeout(() => { if (state.battle && !state.battle.won && state.battle.phase === 'question') mountQuestionModal(); }, 2200);
+    else battleTimeout(() => { if (state.battle && !state.battle.won && state.battle.phase === 'question') mountQuestionModal(); }, 2200);
   }
   watchBattleArena();
   if (journal) {
     // Per-location scene art lights up the moment its file exists; the shared art is the fallback.
     const scene = document.querySelector('.location-stage>.scene');
-    const slot = locationArt[node.kind];
+    const slot = state.journey === 'electricity' ? `assets/electricity-location-${node.kind}.webp` : locationArt[node.kind];
     if (scene && slot) {
       const probe = new Image();
       probe.onload = () => { scene.style.backgroundImage = `url('${slot}')`; };
@@ -2277,6 +2800,8 @@ function startEncounter(id, resume = false) {
 // Backfills battle fields introduced after a run was saved, so older saves resume cleanly.
 function normalizeBattle(battle, encounter, node) {
   if (!battle?.units) return;
+  // Older versions saved after enemy actions without a restorable next button.
+  if (battle.phase === 'resolving') battle.phase = 'awaiting-next';
   battle.kind = battle.kind || node.kind;
   // Old Joule saves used a legacy unit id, so roster hydration never found the
   // current boss definition and left the original 8 HP blob intact.
@@ -2299,7 +2824,7 @@ function normalizeBattle(battle, encounter, node) {
   if (!Array.isArray(battle.pendulumQueue)) battle.pendulumQueue = [];
   if (typeof battle.roundMultiplier !== 'number') battle.roundMultiplier = 1;
   battle.roundMultiplier = 1; // wrong answers now drain Energy instead of weakening cards
-  battle.answering = false;
+  battle.answering = Boolean(battle.answerFeedback);
   if (!Array.isArray(battle.questions) || !battle.questions.length) battle.questions = drawBattleQuestions(state.encounter, node);
   if (battle.phase === 'question' && !battle.questions[battle.round]) {
     const fresh = pickQuestions(null, 1, levelsForNode(node))[0] || pickQuestions(null, 1, [1, 2, 3])[0];
@@ -2323,8 +2848,9 @@ function wireBattleHint() {
 
 function useBattleHint() {
   const battle = state.battle;
-  if (!battle || state.insight < 1 || battle.hint?.round === battle.round) return;
+  if (!battle || battle.answering || state.insight < 1 || battle.hint?.round === battle.round) return;
   const question = battle.questions[battle.round];
+  if (!question) return;
   const remove = sample(question.answers.map((_, index) => index).filter(index => index !== question.correct));
   battle.hint = { round: battle.round, eliminated: [remove] };
   state.insight -= 1;
@@ -2340,7 +2866,7 @@ function updateHintButton() {
   if (!hintButton || !state?.battle) return;
   const used = state.battle.hint?.round === state.battle.round;
   const empty = state.insight < 1;
-  hintButton.disabled = used || empty;
+  hintButton.disabled = used || empty || Boolean(state.battle.answering);
   hintButton.innerHTML = used
     ? '<b>Insight spent</b><small>One wrong answer removed this round</small>'
     : empty
@@ -2450,6 +2976,12 @@ function updateEnemyPack() {
     card.setAttribute('aria-label', `${unitName(battle, index)}, ${unit.hp} of ${unit.maxHp} health${defeated ? ', defeated' : ''}`);
     const shieldBadge = card.querySelector('.enemy-shield-badge');
     if (shieldBadge) shieldBadge.classList.toggle('hidden', !(unit.shield && !defeated));
+    const electrocuted = card.querySelector('.enemy-electrocuted');
+    if (electrocuted) {
+      electrocuted.classList.toggle('hidden', !unit.electrocuted || defeated);
+      const amount = electrocuted.querySelector('b');
+      if (amount) amount.textContent = unit.electrocuted || 0;
+    }
   });
   battle.units.forEach((unit, index) => {
     const pip = document.querySelector(`[data-enemy="${index}"] .intent-pip`);
@@ -2489,7 +3021,7 @@ function playerHitFeedback(damage) {
   spawnDamageNumber(readout || fighter, `−${damage}`, 'bad');
   if (readout) {
     readout.classList.add('is-alarmed');
-    setTimeout(() => readout.classList.remove('is-alarmed'), 900);
+    battleTimeout(() => readout.classList.remove('is-alarmed'), 900);
   }
 }
 
@@ -2498,6 +3030,16 @@ function refreshBattlePlayerReadout(battle) {
   const health = document.querySelector('[data-battle-player-health]');
   if (bar) bar.style.width = `${state.health / state.maxHealth * 100}%`;
   if (health) health.textContent = `${state.health}/${state.maxHealth}`;
+  const readout = document.querySelector('.fighter-readout');
+  let status = readout?.querySelector('.player-electric-status');
+  if (readout && !status) {
+    readout.querySelector(':scope > b')?.insertAdjacentHTML('afterend', '<span class="combat-status player-electric-status"></span>');
+    status = readout.querySelector('.player-electric-status');
+  }
+  if (status) {
+    status.innerHTML = [battle.charged ? `<span title="Charged — next hit gains bonus damage">ϟ ${battle.charged}</span>` : '', battle.grounded ? `<span title="Grounded — reduces the next enemy hit">⏚ ${battle.grounded}</span>` : ''].filter(Boolean).join(' ');
+    status.classList.toggle('hidden', !battle.charged && !battle.grounded);
+  }
   syncBlockBadge(battle);
 }
 
@@ -2505,12 +3047,14 @@ function refreshBattlePlayerReadout(battle) {
 // ghost segment on the explorer's health bar so defence is plannable.
 function intendedEnemyDamage(battle) {
   let total = 0;
+  let grounding = battle.grounded || 0;
   battle.units.forEach(unit => {
     if (unit.hp <= 0) return;
     const intent = unitIntent(unit);
-    if (intent.kind !== 'attack' && intent.kind !== 'drain' && intent.kind !== 'charge') return;
+    if (intent.kind !== 'attack' && intent.kind !== 'drain') return;
     const reduction = (battle.damping || 0) + (unit.weak ? unit.weak.n : 0);
-    total += Math.max(0, intent.damage - reduction);
+    total += Math.max(0, intent.damage - reduction - grounding);
+    if (intent.kind === 'attack' || intent.kind === 'drain') grounding = 0;
   });
   return total;
 }
@@ -2546,7 +3090,9 @@ function resolveUnitIntent(battle, unit, index) {
   const result = { index, name, kind: intent.kind, damage: 0, absorbed: 0, stolen: 0 };
   if (intent.kind === 'attack' || intent.kind === 'drain') {
     const reduction = (battle.damping || 0) + (unit.weak ? unit.weak.n : 0);
-    const reducedDamage = Math.max(0, intent.damage - reduction);
+    const grounding = battle.grounded || 0;
+    const reducedDamage = Math.max(0, intent.damage - reduction - grounding);
+    if (grounding > 0) battle.grounded = 0;
     result.absorbed = Math.min(battle.block, reducedDamage);
     battle.block -= result.absorbed;
     result.damage = reducedDamage - result.absorbed;
@@ -2562,13 +3108,6 @@ function resolveUnitIntent(battle, unit, index) {
   return result;
 }
 
-function enemyActionLine(action) {
-  if (action.kind === 'guard') return `<strong>${action.name}</strong> braces behind a shield.`;
-  if (action.kind === 'charge') return `<strong>${action.name}</strong> gathers force.`;
-  if (action.kind === 'drain') return `<strong>${action.name}</strong> strikes for ${action.damage}${action.absorbed ? ` · Block absorbs ${action.absorbed}` : ''}${action.stolen ? ` · steals ${action.stolen} Supplies` : ''}.`;
-  return `<strong>${action.name}</strong> strikes for ${action.damage}${action.absorbed ? ` · Block absorbs ${action.absorbed}` : ''}.`;
-}
-
 async function animateEnemyAction(action) {
   const enemy = document.querySelector(`[data-enemy="${action.index}"]`);
   if (!enemy) return;
@@ -2576,11 +3115,11 @@ async function animateEnemyAction(action) {
   enemy.classList.add(className);
   enemy.querySelector('.intent-pip')?.classList.add('is-resolving');
   if (action.kind === 'attack' || action.kind === 'drain') {
-    await new Promise(resolve => setTimeout(resolve, preferences.reducedMotion ? 0 : 260));
+    await new Promise(resolve => battleTimeout(resolve, preferences.reducedMotion ? 0 : 260));
     if (action.damage > 0) playerHitFeedback(action.damage);
     else if (action.absorbed > 0) spawnDamageNumber(document.querySelector('.fighter-readout'), `⛨ ${action.absorbed}`, 'good');
   }
-  await new Promise(resolve => setTimeout(resolve, preferences.reducedMotion ? 0 : action.kind === 'attack' || action.kind === 'drain' ? 360 : 520));
+  await new Promise(resolve => battleTimeout(resolve, preferences.reducedMotion ? 0 : action.kind === 'attack' || action.kind === 'drain' ? 360 : 520));
   enemy.classList.remove(className);
   enemy.querySelector('.intent-pip')?.classList.remove('is-resolving');
 }
@@ -2589,19 +3128,24 @@ async function animateEnemyAction(action) {
 async function resolveEnemyResponse() {
   const battle = hydrateUnits(state.battle);
   let totalTaken = 0;
-  const reports = [];
   for (let index = 0; index < battle.units.length && state.health > 0; index += 1) {
     const unit = battle.units[index];
     if (unit.hp <= 0) continue;
     const action = resolveUnitIntent(battle, unit, index);
-    reports.push(enemyActionLine(action));
     totalTaken += action.damage;
     await animateEnemyAction(action);
+    if (state.battle !== battle) return;
+    if (unit.electrocuted > 0 && unit.hp > 0) {
+      const pulse = unit.electrocuted;
+      unit.electrocuted = 0;
+      unit.hp = Math.max(0, unit.hp - pulse);
+      markEnemyHit(index, pulse);
+    }
     refreshBattlePlayerReadout(battle);
     refreshHud();
     updateEnemyPack();
   }
-  if (battle.damping > 0) battle.damping = Math.max(0, battle.damping - 1);
+  if (battle.dampingTurns > 0 && --battle.dampingTurns === 0) battle.damping = 0;
   battle.lastTaken = totalTaken;
   // Block is a per-exchange resource: once the enemy round resolves, whatever
   // survived is spent. Leftover Block visibly shatters unless Inertia holds it.
@@ -2615,7 +3159,7 @@ async function resolveEnemyResponse() {
       badge.classList.remove('hidden', 'is-retained');
       void badge.offsetWidth; // restart the shatter animation on repeat rounds
       badge.classList.add('is-breaking');
-      setTimeout(() => { badge.classList.remove('is-breaking'); refreshBattlePlayerReadout(battle); }, 540);
+      battleTimeout(() => { badge.classList.remove('is-breaking'); refreshBattlePlayerReadout(battle); }, 540);
     } else {
       refreshBattlePlayerReadout(battle);
     }
@@ -2624,16 +3168,20 @@ async function resolveEnemyResponse() {
     refreshBattlePlayerReadout(battle);
   }
   updateIncomingPreview();
-  const stage = document.querySelector('.location-stage');
-  stage?.querySelector('.battle-next-row')?.remove();
-  document.querySelector('#battle-next')?.remove();
-  stage?.insertAdjacentHTML('beforeend', `<div class="battle-next-row"><div class="enemy-phase-report">${reports.map(report => `<span>${report}</span>`).join('')}</div></div><button class="battle-next" id="battle-next">${state.health <= 0 ? 'See the aftermath' : 'Next exchange'}</button>`);
+  battle.phase = 'awaiting-next';
   refreshHud();
   saveRun();
+  showBattleNext(battle);
+}
+
+function showBattleNext(battle) {
+  const stage = document.querySelector('.location-stage');
+  document.querySelector('#battle-next')?.remove();
+  stage?.insertAdjacentHTML('beforeend', `<button class="battle-next" id="battle-next">${state.health <= 0 ? 'See the aftermath' : 'Next exchange'}</button>`);
   document.querySelector('#battle-next')?.addEventListener('click', () => {
+    if (state.battle !== battle || battle.phase !== 'awaiting-next') return;
     if (state.health <= 0) return renderEnd(false);
     document.querySelector('#battle-next')?.remove();
-    document.querySelector('.battle-next-row')?.remove();
     renderBattleRound();
   });
 }
@@ -2664,7 +3212,7 @@ function animateCardPlay(ghost, targetEl) {
       ghost.style.setProperty('--play-y', `${to.top + to.height / 2 - from.top - from.height / 2}px`);
       ghost.classList.add('is-playing');
     }));
-    setTimeout(finish, 430);
+    battleTimeout(finish, 430);
   });
 }
 
@@ -2677,13 +3225,20 @@ function uniqueRewardCards(pool, count, picks = []) {
 function battleCardRewardChoices(battle) {
   const act = state.act || 1;
   const extra = ownsReward('artifact', 'surveyors-lens') ? 1 : 0;
-  if (battle.kind === 'joule') return uniqueRewardCards(cardPool(act, ['rare']), 3);
+  if (battle.kind === 'joule') {
+    const rares = cardPool(act, ['rare']);
+    return uniqueRewardCards(rares.length ? rares : cardPool(act), 3);
+  }
   if (battle.kind === 'elite') return uniqueRewardCards(cardPool(act), 3 + extra, uniqueRewardCards(cardPool(act, ['rare']), 1));
   return cardRewardChoices(act, 3 + extra);
 }
 
 function prepareBattleRewards(battle) {
-  if (battle.rewardPrepared) return;
+  if (battle.rewardPrepared) {
+    // Repair already-saved guardian screens whose old rare pool was empty.
+    if (!battle.rewardPicked && !battle.rewardChoices?.length) battle.rewardChoices = battleCardRewardChoices(battle).map(def => def.id);
+    return;
+  }
   if (!Array.isArray(state.artifacts)) state.artifacts = [];
   if (!Array.isArray(state.discoveries)) state.discoveries = [];
   battle.rewardChoices = battleCardRewardChoices(battle).map(def => def.id);
@@ -2724,7 +3279,7 @@ function battleRewardModalHTML(battle) {
   const artifactHTML = artifact ? `<section class="reward-special-section"><small>Elite field artifact</small><article class="reward-special-item${battle.artifactClaimed ? ' is-claimed' : ''}"><span>${artifact.mark}</span><div><b>${artifact.name}</b><p>${artifact.text}</p></div><button type="button" data-reward-artifact="${artifact.id}"${battle.artifactClaimed ? ' disabled' : ''}>${battle.artifactClaimed ? 'Claimed' : 'Claim artifact'}</button></article></section>` : '';
   const discoveries = (battle.discoveryChoices || []).map(id => rewardDefinition('discovery', id)).filter(Boolean);
   const discoveryHTML = discoveries.length ? `<section class="reward-special-section reward-discovery-section"><small>Choose one Major Discovery</small><div class="reward-discovery-options">${discoveries.map(item => `<button type="button" class="reward-discovery${battle.discoveryPicked === item.id ? ' is-selected' : battle.discoveryPicked ? ' is-unselected' : ''}" data-reward-discovery="${item.id}"${battle.discoveryPicked ? ' disabled' : ''}><span>${item.mark}</span><b>${item.name}</b><small>${item.text}</small></button>`).join('')}</div></section>` : '';
-  const cardHeading = cardDecided ? (picked === 'skip' ? 'Card reward skipped' : `${cardDef(picked)?.name || 'Card'} claimed`) : battle.kind === 'joule' ? 'Choose one rare card' : battle.kind === 'elite' ? 'Choose one card · improved rarity' : 'Choose one card';
+  const cardHeading = cardDecided ? (picked === 'skip' ? 'Card reward skipped' : `${cardDef(picked)?.name || 'Card'} claimed`) : battle.kind === 'joule' ? (choices.length && choices.every(def => def.rarity === 'rare') ? 'Choose one rare card' : 'Choose one guardian card reward') : battle.kind === 'elite' && choices.some(def => def.rarity === 'rare') ? 'Choose one card · improved rarity' : 'Choose one card';
   const choiceHTML = `<div class="reward-card-section"><small>${cardHeading}</small><div class="reward-card-options">${choices.map(def => `<button type="button" class="card-tile card-type-${def.type}${picked === def.id ? ' is-selected' : cardDecided ? ' is-unselected' : ''}" data-reward-card="${def.id}"${cardDecided ? ' disabled' : ''}><span class="card-cost"><small>Cost:</small> ${energyCostMarks(def.cost)}</span><b class="card-name">${def.name}</b><span class="card-type">${def.type === 'attack' ? '⚔ Attack' : def.type === 'skill' ? '⛨ Skill' : '✦ Power'}</span><span class="card-text">${def.text}</span><span class="card-topic">${def.topic || 'any topic'}</span></button>`).join('')}</div></div>
     <button type="button" class="reward-skip${picked === 'skip' ? ' is-selected' : cardDecided ? ' is-unselected' : ''}" data-reward-card="skip"${cardDecided ? ' disabled' : ''}>${picked === 'skip' ? 'Card reward skipped' : 'Skip card reward'}</button>`;
   return `<div class="battle-reward-overlay" id="battle-reward-overlay" role="dialog" aria-modal="true" aria-labelledby="reward-title">
@@ -2861,6 +3416,22 @@ function applyCardEffect(instance, mult, targetIndex = null) {
         report += `${def.name}: ⛨ Block ${battle.block}. `;
         break;
       }
+      case 'charged': {
+        battle.charged = Math.max(battle.charged, scaled(up ? e.up : e.n));
+        report += `${def.name}: Charged ${battle.charged}. `;
+        break;
+      }
+      case 'grounded': {
+        battle.grounded = Math.max(battle.grounded, scaled(up ? e.up : e.n));
+        report += `${def.name}: Grounded ${battle.grounded}. `;
+        break;
+      }
+      case 'electrocuted': {
+        const pulse = scaled(up ? e.up : e.n);
+        battle.units[target].electrocuted = Math.max(battle.units[target].electrocuted || 0, pulse);
+        report += `${def.name}: ${targetName} Electrocuted ${pulse}. `;
+        break;
+      }
       case 'insight': {
         const n = scaled(up ? e.up : e.n);
         dealToEnemy(battle, target, Math.max(1, n));
@@ -2888,6 +3459,7 @@ function applyCardEffect(instance, mult, targetIndex = null) {
       }
       case 'damping': {
         battle.damping = Math.max(battle.damping, (up ? e.up : e.n));
+        battle.dampingTurns = Math.max(battle.dampingTurns, up ? 3 : e.dur);
         report += `${def.name}: enemy blows dulled by ${up ? e.up : e.n}. `;
         break;
       }
@@ -3001,11 +3573,12 @@ function applyCardEffect(instance, mult, targetIndex = null) {
   return report;
 }
 
-async function resolveBattleAnswer(choice) {
+function resolveBattleAnswer(choice) {
   const battle = hydrateUnits(state.battle);
   if (!battle || battle.phase !== 'question' || battle.answering) return;
   battle.answering = true;
   const question = battle.questions[battle.round];
+  if (!question) { battle.answering = false; return; }
   const correct = choice === question.correct;
   document.querySelectorAll('#battle-question-overlay [data-battle-answer]').forEach(button => {
     button.disabled = true;
@@ -3027,6 +3600,15 @@ async function resolveBattleAnswer(choice) {
     energyLost = Math.min(battle.energy, 1 + (state.act || 1));
     battle.energy = Math.max(0, battle.energy - energyLost);
   }
+  battle.answerFeedback = { correct, energyLost };
+  showBattleAnswerFeedback(battle);
+  refreshHud();
+  saveRun();
+}
+
+function showBattleAnswerFeedback(battle) {
+  const { correct, energyLost } = battle.answerFeedback;
+  const question = battle.questions[battle.round];
   const verdict = document.querySelector('#battle-question-verdict');
   if (verdict) {
     verdict.innerHTML = correct
@@ -3035,10 +3617,27 @@ async function resolveBattleAnswer(choice) {
     verdict.classList.remove('hidden');
     verdict.classList.toggle('verdict-good', correct);
     verdict.classList.toggle('verdict-bad', !correct);
+    const explanation = document.createElement('span');
+    explanation.style.display = 'block';
+    explanation.textContent = question.explanation || question.answers[question.correct];
+    verdict.append(explanation);
+    const next = document.createElement('button');
+    next.type = 'button';
+    next.className = 'answer-btn';
+    next.id = 'question-feedback-continue';
+    next.textContent = 'Continue';
+    next.addEventListener('click', finishBattleAnswer, { once: true });
+    const actions = document.querySelector('#battle-question-actions');
+    actions.replaceChildren(next);
+    actions.classList.remove('hidden');
+    next.focus();
   }
-  refreshHud();
-  saveRun();
-  await new Promise(resolve => setTimeout(resolve, preferences.reducedMotion ? 150 : 1100));
+}
+
+function finishBattleAnswer() {
+  const battle = hydrateUnits(state.battle);
+  if (!battle?.answerFeedback) return;
+  battle.answerFeedback = null;
 
   // Legacy saves committed cards before asking; resolve them now, then open
   // the card phase as usual.
@@ -3072,6 +3671,9 @@ function resolveLocationAction(action) {
   const outcome = document.querySelector('#outcome');
   outcome.classList.remove('hidden');
 
+  const isElectric = state.journey === 'electricity';
+  const wording = (mechanics, electricity) => isElectric ? electricity : mechanics;
+
   const finish = (tone, message) => {
     outcome.className = `outcome outcome-${tone}`;
     outcome.innerHTML = message;
@@ -3101,51 +3703,54 @@ function resolveLocationAction(action) {
   };
 
   if (action.startsWith('hazard-')) {
-    const challenge = hazardChallenges[state.encounter] || hazardChallenges.river;
+    const challenge = isElectric ? ELECTRICITY_HAZARDS[state.act || 1] : hazardChallenges[state.encounter] || hazardChallenges.river;
     const correct = Number(action.slice(7)) === challenge.correct;
     if (correct) {
       state.coins += encounters[state.encounter].reward;
-      return finish('good', `<strong>Route committed — +${encounters[state.encounter].reward} Supplies.</strong><br>The movement works. The hazard continues looking dangerous somewhere behind you.`);
+      return finish('good', state.journey === 'electricity' ? `<strong>Authorised route crossed — +${encounters[state.encounter].reward} Supplies.</strong><br>The route controller confirms your bypass selection.` : `<strong>Route committed — +${encounters[state.encounter].reward} Supplies.</strong><br>The movement works. The hazard continues looking dangerous somewhere behind you.`);
     }
     const damage = encounters[state.encounter].damage;
     state.health = Math.max(0, state.health - damage);
     state.grudge = (state.grudge || 0) + 1;
-    return finish('bad', `<strong>The vector disagrees — −${damage} Stability.</strong><br>${encounters[state.encounter].lose}`);
+    return finish('bad', state.journey === 'electricity' ? `<strong>Access interlock rejected — −${damage} Stability.</strong><br>The controller rejects the route. The expedition loses equipment Stability.` : `<strong>The vector disagrees — −${damage} Stability.</strong><br>${encounters[state.encounter].lose}`);
   }
 
   if (action.startsWith('ruin-')) {
     const session = state.locationSession;
-    const stage = ruinStages[session.phase];
+    const stages = isElectric ? ELECTRICITY_CONTROL_STAGES[state.act || 1] : ruinStages;
+    const stage = stages[session.phase];
     const correct = Number(action.slice(5)) === stage.correct;
     if (!correct) {
       session.mistakes += 1;
       state.health = Math.max(0, state.health - 5);
     }
     session.phase += 1;
-    if (session.phase < ruinStages.length) {
-      return stay(correct ? 'good' : 'bad', correct
+    if (session.phase < stages.length) {
+      return stay(correct ? 'good' : 'bad', state.journey === 'electricity' ? (correct
+        ? '<strong>The relay closes cleanly.</strong><br>Current reaches the next control stage.'
+        : '<strong>Control mismatch — −5 Stability.</strong><br>The diagnostic flags the mismatched control before advancing.') : correct
         ? '<strong>The ring settles into alignment.</strong><br>The motion transfers deeper into the machine.'
         : '<strong>The ring bites back — −5 Stability.</strong><br>It eventually settles, although not with dignity.');
     }
     const reward = Math.max(10, 32 - session.mistakes * 7);
     state.coins += reward;
     if (session.mistakes === 0) state.insight += 1;
-    return finish(session.mistakes ? 'bad' : 'good', `<strong>Mechanism opened — +${reward} Supplies${session.mistakes ? '' : ' and +1 Insight'}.</strong><br>${session.mistakes ? 'The machine accepts the solution with several mechanical objections.' : 'All three rings lock into one quiet, exact line.'}`);
+    return finish(session.mistakes ? 'bad' : 'good', state.journey === 'electricity' ? `<strong>Control array restored — +${reward} Supplies${session.mistakes ? '' : ' and +1 Insight'}.</strong><br>${session.mistakes ? 'The protection circuit records the faults, then opens the route.' : 'All three diagnostic stages are complete.'}` : `<strong>Mechanism opened — +${reward} Supplies${session.mistakes ? '' : ' and +1 Insight'}.</strong><br>${session.mistakes ? 'The machine accepts the solution with several mechanical objections.' : 'All three rings lock into one quiet, exact line.'}`);
   }
 
   if (action === 'cache-supplies') {
     state.coins += 38;
-    return finish('good', '<strong>Provision cache opened — +38 Supplies.</strong><br>The brass seals split and a remarkably practical fortune rolls out.');
+    return finish('good', wording('<strong>Provision cache opened — +38 Supplies.</strong><br>The brass seals split and a remarkably practical fortune rolls out.', '<strong>Component reserve opened — +38 Supplies.</strong><br>The insulated vault releases a stock of useful replacement parts.'));
   }
   if (action === 'cache-relic') {
     if (!state.charmOwned) {
       state.charmOwned = true;
       state.maxHealth += 5;
       state.health += 5;
-      return finish('good', '<strong>Warding charm recovered — +5 maximum Stability.</strong><br>The jungle appears marginally less confident about hitting you.');
+      return finish('good', wording('<strong>Warding charm recovered — +5 maximum Stability.</strong><br>The jungle appears marginally less confident about hitting you.', '<strong>Protective equipment module recovered — +5 maximum Stability.</strong><br>Reinforced equipment improves your expedition’s resilience.'));
     }
     state.insight += 2;
-    return finish('good', '<strong>Resonant compass recovered — +2 Insight.</strong><br>Its needle points toward whichever mistake you were about to make.');
+    return finish('good', wording('<strong>Resonant compass recovered — +2 Insight.</strong><br>Its needle points toward whichever mistake you were about to make.', '<strong>Calibration records recovered — +2 Insight.</strong><br>The instrument log reveals two useful circuit observations.'));
   }
   if (action === 'cache-card') {
     const rares = cardPool(state.act || 1).filter(card => card.rarity === 'rare');
@@ -3157,24 +3762,24 @@ function resolveLocationAction(action) {
   if (action === 'recover') {
     const restored = Math.min(actRestRecovery(), state.maxHealth - state.health);
     state.health += restored;
-    return finish('good', `<strong>Stability restored by ${restored}.</strong><br>The stones hold while you catch your breath.`);
+    return finish('good', `<strong>Stability restored by ${restored}.</strong><br>${wording('The stones hold while you catch your breath.', 'Replacement fittings and insulation restore your expedition equipment.')}`);
   }
   if (action === 'prepare') {
     state.insight += 1;
-    return finish('good', '<strong>Insight gained.</strong><br>One diagram is labelled “obvious”. It becomes obvious after twelve minutes.');
+    return finish('good', wording('<strong>Insight gained.</strong><br>One diagram is labelled “obvious”. It becomes obvious after twelve minutes.', '<strong>Insight gained.</strong><br>You trace the circuit records and identify a useful connection.'));
   }
   if (action === 'sharpen') {
     // Sharpening shows the deck instead of finishing: pick a card to upgrade.
     const candidates = (state.deck || []).map((instance, index) => ({ instance, index })).filter(entry => !entry.instance.upgraded && cardDef(entry.instance.id));
-    if (!candidates.length) return finish('good', '<strong>Nothing left to sharpen.</strong><br>Every card in your deck is already at full precision. Jamnani approves.');
+    if (!candidates.length) return finish('good', wording('<strong>Nothing left to sharpen.</strong><br>Every card in your deck is already at full precision. Jamnani approves.', '<strong>Calibration complete.</strong><br>Every card in your deck is already upgraded.'));
     document.querySelector('.location-action-panel')?.classList.add('is-sharpening');
     outcome.className = 'outcome outcome-good';
-    outcome.innerHTML = `<strong>Sharpen one card.</strong><div class="deck-grid sharpen-deck-grid" id="deck-view" tabindex="0" aria-label="Cards available to sharpen">${candidates.map(entry => cardTile(entry.instance, { playable: true, attr: `data-upgrade-card="${entry.index}"` })).join('')}</div>`;
+    outcome.innerHTML = `<strong>${wording('Sharpen one card.', 'Calibrate one circuit technique.')}</strong><div class="deck-grid sharpen-deck-grid" id="deck-view" tabindex="0" aria-label="${wording('Cards available to sharpen', 'Cards available to calibrate')}">${candidates.map(entry => cardTile(entry.instance, { playable: true, attr: `data-upgrade-card="${entry.index}"` })).join('')}</div>`;
     document.querySelectorAll('[data-upgrade-card]').forEach(button => button.addEventListener('click', () => {
       const instance = state.deck[Number(button.dataset.upgradeCard)];
       instance.upgraded = true;
       const def = cardDef(instance.id);
-      outcome.innerHTML = `<strong>${def.name}+ sharpened.</strong><br>${def.up} The edge is theoretical. The results are not.`;
+      outcome.innerHTML = `<strong>${def.name}+ ${wording('sharpened', 'calibrated')}.</strong><br>${def.up} ${wording('The edge is theoretical. The results are not.', 'The upgraded technique is now part of your circuit deck.')}`;
       showEncounterContinue();
       state.pendingCompletion = true;
       saveRun();
@@ -3193,7 +3798,8 @@ function resolveLocationAction(action) {
     return stay('good', `<strong>${def.name} acquired — ${price} Supplies.</strong><br>The trader quietly replaces the empty space with nothing.`);
   }
   if (action.startsWith('buy-')) {
-    const item = shopCatalogue.find(entry => `buy-${entry.id}` === action);
+    const baseItem = shopCatalogue.find(entry => `buy-${entry.id}` === action);
+    const item = baseItem && isElectric ? { ...baseItem, ...ELECTRICITY_SHOP_ITEMS[baseItem.id] } : baseItem;
     const price = item ? shopPrice(item) : 0;
     if (!item) return finish('bad', '<strong>The trader mishears you completely.</strong><br>Nothing changes hands. Nobody speaks of it again.');
     if (state.coins < price) return stay('bad', `<strong>Not enough Supplies for the ${item.name.toLowerCase()}.</strong><br>The trader recommends acquiring wealth before attempting commerce.`);
@@ -3210,30 +3816,30 @@ function resolveLocationAction(action) {
     if (state.insight < 1) return stay('bad', '<strong>No Insight to trade.</strong><br>The trader refuses to accept confidence as legal tender.');
     state.insight -= 1;
     state.coins += 20;
-    return stay('good', '<strong>Trade complete — 20 Supplies gained.</strong><br>You immediately forget one useful diagram.');
+    return stay('good', wording('<strong>Trade complete — 20 Supplies gained.</strong><br>You immediately forget one useful diagram.', '<strong>Records exchanged — 20 Supplies gained.</strong><br>One recorded Insight is exchanged for useful components.'));
   }
   if (action === 'offering') {
-    if (state.coins < 10) return finish('bad', '<strong>No offering to give.</strong><br>The shrine does not accept promissory notes.');
-    return gamble('The numerals circle your offering…', () => {
+    if (state.coins < 10) return finish('bad', wording('<strong>No offering to give.</strong><br>The shrine does not accept promissory notes.', '<strong>Insufficient Supplies.</strong><br>The diagnostic requires 10 Supplies of replacement components.'));
+    return gamble(wording('The numerals circle your offering…', 'The terminal runs its diagnostic sequence…'), () => {
       state.coins -= 10;
       const roll = Math.random();
-      if (roll < .40) { state.insight += 2; return ['good', '<strong>The shrine is pleased — 2 Insight gained.</strong><br>The numerals briefly arrange themselves into a smug tick.']; }
-      if (roll < .60) { state.insight += 2; state.coins += 12; return ['good', '<strong>Overflowing — 2 Insight and 12 Supplies returned.</strong><br>The shrine overpays. Nobody knows why. Do not ask.']; }
-      if (roll < .85) return ['bad', '<strong>The shrine keeps your offering.</strong><br>Ten Supplies vanish. The jungle absorbs the rounding error.'];
+      if (roll < .40) { state.insight += 2; return ['good', wording('<strong>The shrine is pleased — 2 Insight gained.</strong><br>The numerals briefly arrange themselves into a smug tick.', '<strong>Diagnostic complete — 2 Insight gained.</strong><br>The terminal records two previously hidden circuit faults.')]; }
+      if (roll < .60) { state.insight += 2; state.coins += 12; return ['good', wording('<strong>Overflowing — 2 Insight and 12 Supplies returned.</strong><br>The shrine overpays. Nobody knows why. Do not ask.', '<strong>Recovery complete — 2 Insight and 12 Supplies returned.</strong><br>The diagnostic unlocks a spare component drawer.')]; }
+      if (roll < .85) return ['bad', wording('<strong>The shrine keeps your offering.</strong><br>Ten Supplies vanish. The jungle absorbs the rounding error.', '<strong>Diagnostic inconclusive — 10 Supplies spent.</strong><br>The terminal consumes the replacement parts without producing a usable result.')];
       state.health = Math.max(0, state.health - 4); state.insight += 1;
-      return ['bad', '<strong>An aggressively educational shock — −4 Stability.</strong><br>It does grant 1 Insight on the way out. Small mercies.'];
+      return ['bad', wording('<strong>An aggressively educational shock — −4 Stability.</strong><br>It does grant 1 Insight on the way out. Small mercies.', '<strong>Equipment overload — −4 Stability, +1 Insight.</strong><br>The diagnostic records a fault but damages part of the expedition’s equipment.')];
     });
   }
   if (action === 'symbols') {
-    return gamble('The symbols rearrange themselves…', () => {
+    return gamble(wording('The symbols rearrange themselves…', 'The terminal retrieves its stored signal records…'), () => {
       const roll = Math.random();
       if (roll < .60) { state.insight += 1; state.coins += 12; return ['good', '<strong>The pattern resolves — 12 Supplies and 1 Insight.</strong><br>Precision opens a hidden compartment.']; }
-      if (roll < .85) { state.insight += 1; return ['good', '<strong>The symbols rearrange into a shrug — 1 Insight.</strong><br>Wisdom, but conspicuously no gold.']; }
+      if (roll < .85) { state.insight += 1; return ['good', wording('<strong>The symbols rearrange into a shrug — 1 Insight.</strong><br>Wisdom, but conspicuously no gold.', '<strong>Signal interpreted — +1 Insight.</strong><br>The archive contains an observation but no spare components.')]; }
       state.coins += 25;
-      return ['good', '<strong>Gold, and no wisdom whatsoever — 25 Supplies.</strong><br>The compartment opens onto somebody’s entire life savings.'];
+      return ['good', wording('<strong>Gold, and no wisdom whatsoever — 25 Supplies.</strong><br>The compartment opens onto somebody’s entire life savings.', '<strong>Component drawer unlocked — +25 Supplies.</strong><br>The trace identifies a supply drawer, but yields no new Insight.')];
     });
   }
-  return finish('good', '<strong>You leave the landmark untouched.</strong><br>For once, restraint produces no immediate explosion.');
+  return finish('good', wording('<strong>You leave the landmark untouched.</strong><br>For once, restraint produces no immediate explosion.', '<strong>Terminal closed.</strong><br>You leave the equipment as you found it and return to the circuit.'));
 }
 
 function resolveAnswer(choice) {
@@ -3259,6 +3865,11 @@ function resolveAnswer(choice) {
     outcome.className = 'outcome outcome-bad';
     outcome.innerHTML = `<strong>Not quite — −${e.damage} Stability.</strong><br>${e.lose}<br><em>Jamnani: “A painful result, but still a result.”</em><br><span class="outcome-closer">The trail waits. It is not known for its patience.</span>`;
   }
+  if (question.explanation) {
+    const explanation = document.createElement('p');
+    explanation.textContent = question.explanation;
+    outcome.append(explanation);
+  }
   refreshHud();
   showEncounterContinue();
   state.pendingCompletion = true;
@@ -3273,7 +3884,7 @@ function finishEncounter() {
   state.pendingCompletion = false;
   if (state.health <= 0) return renderEnd(false);
   if (node?.kind === 'joule') {
-    if ((state.act || 1) < ACTS.length) return advanceAct();
+    if ((state.act || 1) < (state.journey === 'electricity' ? ELECTRICITY_ACTS : ACTS).length) return advanceAct();
     return renderEnd(true);
   }
   state.completed.push(id);
@@ -3285,7 +3896,7 @@ function finishEncounter() {
   saveRun();
   // Story beats: the deeper canopy opens at the floor elites begin appearing,
   // and the first elite cleared earns its own moment of respect.
-  if (node.floor >= 4 && !state.beats.midpoint) {
+  if (state.journey !== 'electricity' && node.floor >= 4 && !state.beats.midpoint) {
     state.beats.midpoint = true;
     saveRun();
     const midpointScene = state.act === 1 ? 'midpoint' : `midpoint${state.act}`;
@@ -3294,7 +3905,7 @@ function finishEncounter() {
   if (node.kind === 'elite' && !state.beats.elite) {
     state.beats.elite = true;
     saveRun();
-    const eliteScene = state.act === 1 ? 'elite' : `elite${state.act}`;
+    const eliteScene = state.journey === 'electricity' ? 'electricityElite' : state.act === 1 ? 'elite' : `elite${state.act}`;
     return playCutscene(eliteScene, renderMap);
   }
   renderMap();
@@ -3309,6 +3920,7 @@ function upgradeCardsForNewAct(count = 2) {
 
 function advanceAct() {
   state.act = (state.act || 1) + 1;
+  if (state.journey === 'electricity') enterElectricitySection(state, 0);
   state.drawnQuestion = null;
   state.beats = { midpoint: false, elite: false, bossIntro: false };
   state.maxHealth += 5;
@@ -3323,24 +3935,30 @@ function advanceAct() {
   state.activeNode = null;
   state.encounter = null;
   saveRun();
-  playCutscene(`act${state.act}Arrival`, renderMap);
+  if (state.journey === 'electricity') playCutscene(`electricityAct${state.act}`, renderMap);
+  else playCutscene(`act${state.act}Arrival`, renderMap);
 }
 
 function renderEnd(won) {
   clearSavedRun(won);
+  if (state.journey === 'electricity') return playCutscene(won ? 'electricityVictory' : 'electricityDefeat', () => showEndScreen(won));
   playCutscene(won ? 'victory' : 'defeat', () => showEndScreen(won));
 }
 
 function showEndScreen(won) {
   document.onkeydown = null;
+  const slot = currentSaveSlot >= 0 ? loadSaveSlots().slots[currentSaveSlot] : null;
+  const complete = slot && SaveProgress.collected(slot).length === 3;
+  const storyName = journeys.find(journey => journey.id === state.journey)?.name || 'Mechanics';
   app.innerHTML = `<section class="screen title-screen"><div class="run-end">
     <div class="eyebrow">Expedition complete</div>
-    <h1>${won ? 'JOULE FOUND' : 'RUN ENDED'}</h1>
-    <p>${won ? 'The Joule of Mechanics answers your hand with a pulse of golden light. One realm has yielded. The jungle has not.' : 'The canopy closes over the trail. Jamnanji marks the location of your spectacular learning experience.'}</p>
+    <h1>${complete && won ? 'JOURNEY COMPLETE' : won ? 'JOULE FOUND' : 'RUN ENDED'}</h1>
+    <p>${complete && won ? 'Mechanics, Electricity and Waves are in balance. All three Hidden Joules are yours. Jamnanji’s journey is complete—and your save remains open for replay.' : won ? `The Joule of ${storyName} is now part of this save. Choose another available story whenever you are ready.` : 'This attempt is recorded. Your collected Joules and attempt history are safe.'}</p>
+    ${slot ? `<p>${SaveProgress.collected(slot).length} / 3 Joules collected</p>` : ''}
     <p><strong>Coins recovered:</strong> ${state.coins} &nbsp; · &nbsp; <strong>Stability:</strong> ${state.health}/${state.maxHealth}</p>
-    <button class="primary" id="again">${won ? 'Start another run' : 'Return to the jungle'}</button>
+    <button class="primary" id="again">Choose story</button>
   </div></section>`;
-  document.querySelector('#again').addEventListener('click', renderSaveSlots);
+  document.querySelector('#again').addEventListener('click', renderJourneySelect);
 }
 
 // Keep the game surface feeling like an application rather than a selectable
@@ -3360,34 +3978,47 @@ applyPreferences();
 // all without touching save slots.
 const previewScene = new URLSearchParams(location.search).get('cutscene');
 const previewBattle = new URLSearchParams(location.search).get('battle');
+const previewJourney = new URLSearchParams(location.search).get('journey');
+// A cutscene preview owns its story, even when the URL omits ?journey=.
+if (previewScene && cutscenes[previewScene]) selectedJourney = previewScene.startsWith('electricity') ? 'electricity' : 'mechanics';
+else if (previewJourney === 'electricity') selectedJourney = 'electricity';
 // ?act=1|2|3 picks which act's pools a battle preview draws from.
 const previewAct = Math.min(3, Math.max(1, Number(new URLSearchParams(location.search).get('act')) || 1));
 const previewLocation = new URLSearchParams(location.search).get('location');
 if (previewBattle && ['encounter', 'elite', 'joule'].includes(previewBattle)) {
   currentSaveSlot = -1;
-  const previewFloor = Math.min(9, Math.max(1, Number(new URLSearchParams(location.search).get('floor')) || 1));
+  const previewFloor = Math.min(previewAct === 3 ? 12 : 9, Math.max(1, Number(new URLSearchParams(location.search).get('floor')) || 1));
   resetState();
   state.act = previewAct;
+  if (state.journey === 'electricity') enterElectricitySection(state, 0);
+  nodes = generateMap(previewAct);
   const findNode = () => nodes.find(item => item.kind === previewBattle && item.floor >= previewFloor) || nodes.find(item => item.kind === previewBattle);
-  for (let attempt = 0; !findNode() && attempt < 20; attempt += 1) resetState();
+  for (let attempt = 0; !findNode() && attempt < 20; attempt += 1) nodes = generateMap(previewAct);
   state.beats.bossIntro = true; // preview jumps straight into the fight
   const node = findNode();
   if (node) startEncounter(node.id);
   else renderMap();
 } else if (previewLocation && journalKinds.includes(previewLocation)) {
   currentSaveSlot = -1;
-  const previewFloor = Math.min(9, Math.max(1, Number(new URLSearchParams(location.search).get('floor')) || 1));
+  const previewFloor = Math.min(previewAct === 3 ? 12 : 9, Math.max(1, Number(new URLSearchParams(location.search).get('floor')) || 1));
   resetState();
-  for (let attempt = 0; !(nodes.find(item => item.kind === previewLocation && item.floor >= previewFloor) || nodes.find(item => item.kind === previewLocation)) && attempt < 20; attempt += 1) resetState();
+  state.act = previewAct;
+  if (state.journey === 'electricity') enterElectricitySection(state, 0);
+  nodes = generateMap(previewAct);
+  for (let attempt = 0; !(nodes.find(item => item.kind === previewLocation && item.floor >= previewFloor) || nodes.find(item => item.kind === previewLocation)) && attempt < 20; attempt += 1) nodes = generateMap(previewAct);
   state.coins = 60; // review hook: a stocked purse so shop flows can be exercised
   const node = nodes.find(item => item.kind === previewLocation && item.floor >= previewFloor) || nodes.find(item => item.kind === previewLocation);
   if (node) startEncounter(node.id);
   else renderMap();
 } else if (previewScene && cutscenes[previewScene]) {
+  currentSaveSlot = -1;
   resetState();
+  state.act = previewAct;
+  if (state.journey === 'electricity') enterElectricitySection(state, 0);
+  nodes = generateMap(previewAct);
   playCutscene(previewScene, () => {
-    if (previewScene === 'victory') showEndScreen(true);
-    else if (previewScene === 'defeat') showEndScreen(false);
+    if (previewScene === 'victory' || previewScene === 'electricityVictory') showEndScreen(true);
+    else if (previewScene === 'defeat' || previewScene === 'electricityDefeat') showEndScreen(false);
     else renderMap();
   });
 } else {

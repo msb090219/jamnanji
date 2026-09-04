@@ -4,13 +4,17 @@ const path = require('path');
 
 const root = path.join(__dirname, 'site');
 const port = process.env.PORT || 4173;
-const types = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png' };
+const types = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ttf': 'font/ttf', '.woff2': 'font/woff2' };
 
-http.createServer((request, response) => {
+const server = http.createServer((request, response) => {
   const requestPath = request.url.split('?')[0];
-  const filePath = path.resolve(root, `.${decodeURIComponent(requestPath === '/' ? '/index.html' : requestPath)}`);
+  let decoded;
+  try { decoded = decodeURIComponent(requestPath === '/' ? '/index.html' : requestPath); }
+  catch { response.writeHead(400).end('Bad request'); return; }
+  if (decoded.includes('\0')) { response.writeHead(400).end('Bad request'); return; }
+  const filePath = path.resolve(root, `.${decoded}`);
 
-  if (!filePath.startsWith(root)) {
+  if (!filePath.startsWith(root + path.sep)) {
     response.writeHead(403).end('Forbidden');
     return;
   }
@@ -27,5 +31,5 @@ http.createServer((request, response) => {
     response.end(data);
   });
 }).listen(port, '127.0.0.1', () => {
-  console.log(`Jamnanji is running at http://127.0.0.1:${port}`);
+  console.log(`Jamnanji is running at http://127.0.0.1:${server.address().port}`);
 });
